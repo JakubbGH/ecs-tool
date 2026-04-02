@@ -1,50 +1,31 @@
-<!DOCTYPE html>
-<html>
-
-<head>
-
-<title>ECS Validation Tool</title>
-
-<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-<script src="app.js"></script>
-
-<style>
-body{
-font-family: Arial;
-padding:40px;
-}
-
-button{
-padding:10px;
-margin-top:10px;
-}
-
-</style>
-
-</head>
-
 <body>
 
-<h2>ECS Validation Tool</h2>
+    <h2>ECS Validation Tool</h2>
 
-<label>Select Validation Type</label>
+    <div style="background: #f4f4f4; padding: 15px; border-radius: 8px;">
+        <label>Select Building:</label>
+        <select id="buildingSelect"></select>
+        <button onclick="addRow()" style="background: #28a745; color: white;">Add to List</button>
+    </div>
 
-<select id="validation">
-<option>1HAND_POS</option>
-<option>2PREP_ALMT</option>
-<option>3WELDING</option>
-<option>4PUNCH</option>
-</select>
+    <br>
 
-<br><br>
+    <table id="ecsTable" border="1" style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="background: #eee;">
+                <th>Building (ECS Code)</th>
+                <th>Validation Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            </tbody>
+    </table>
 
-<label>Upload Excel File</label>
+    <br>
 
-<input type="file" id="excelFile">
-
-<br><br>
-
-<button onclick="processFile()">Generate Validated Excel</button>
+    <button onclick="exportExcel()" style="width: 100%; font-weight: bold; background: #007bff; color: white;">
+        Export Final Excel
+    </button>
 
 </body>
-</html>
