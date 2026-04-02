@@ -1,12 +1,16 @@
 let database = [];
 
-// Load PLOW Data
+// Initialize on load
+window.onload = () => { loadData(); };
+
 async function loadData() {
     const statusLabel = document.getElementById("syncStatus");
     statusLabel.innerText = "Syncing...";
     try {
-        const cacheBuster = new Date().getTime();
-        const response = await fetch(`./database.json?t=${cacheBuster}`);
+        // Cache-buster ensures GitHub serves the absolute newest file
+        const t = new Date().getTime();
+        const response = await fetch(`./database.json?t=${t}`);
+        
         if (!response.ok) throw new Error("File not found");
         
         database = await response.json();
@@ -17,50 +21,46 @@ async function loadData() {
             bSelect.add(new Option(item.building, item.building));
         });
 
-        statusLabel.innerText = "PLOW Loaded: " + new Date().toLocaleTimeString();
+        statusLabel.innerText = "PLOW Active: " + new Date().toLocaleTimeString();
         statusLabel.style.color = "green";
+        console.log("PLOW Data Synced:", database);
     } catch (error) {
-        statusLabel.innerText = "Load Failed - Check JSON";
+        statusLabel.innerText = "LOAD ERROR";
         statusLabel.style.color = "red";
-        console.error(error);
+        alert("CRITICAL: database.json could not be loaded. Check file name and JSON syntax.");
     }
 }
 
 function loadBuildingToTable() {
-    const bValue = document.getElementById("buildingSelect").value;
-    const match = database.find(d => d.building === bValue);
+    const bValue = document.getElementById("buildingSelect").value.trim();
     const tbody = document.querySelector("#ecsTable tbody");
+    const existingRows = tbody.getElementsByTagName("tr");
 
-    // --- DUPLICATE CHECK ---
-    // Look at all existing rows in the table
-    const existingRows = tbody.querySelectorAll("tr");
-    let alreadyExists = false;
-
-    existingRows.forEach(row => {
-        // Check if the first cell (Building name) matches the selection
-        if (row.cells[0].innerText === bValue) {
-            alreadyExists = true;
+    // --- DUPLICATE PREVENTION LOOP ---
+    for (let i = 0; i < existingRows.length; i++) {
+        let currentCellVal = existingRows[i].cells[0].innerText.trim();
+        if (currentCellVal.toLowerCase() === bValue.toLowerCase()) {
+            alert(`Duplicate Blocked: ${bValue} is already in the list.`);
+            return; // Hard stop
         }
-    });
-
-    if (alreadyExists) {
-        alert(`STOP: ${bValue} is already loaded in the table.`);
-        return; // Exit the function so no rows are added
     }
-    // ------------------------
+
+    // Find the building in our local database
+    const match = database.find(d => d.building.trim().toLowerCase() === bValue.toLowerCase());
 
     if (!match || !match.ecs_list) {
-        alert("No ECS data found for this building.");
+        alert("Error: No data found for this selection.");
         return;
     }
 
+    // Add all ECS codes from that building
     match.ecs_list.forEach(ecs => {
         const row = tbody.insertRow();
         row.innerHTML = `
             <td style="font-weight:bold;">${bValue}</td>
             <td>${ecs}</td>
             <td>
-                <select style="width:100%; padding:8px;">
+                <select style="width:100%; padding:8px; border-radius:4px;">
                     <option>1HAND_POS</option>
                     <option>2PREP_ALMT</option>
                     <option>3WELDING</option>
@@ -87,5 +87,7 @@ function exportExcel() {
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Collection");
-    XLSX.writeFile(wb, `PLOW_Export_${new Date().toISOString().slice(0,10)}.xlsx`);
+    
+    const fileDate = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `PLOW_Data_${fileDate}.xlsx`);
 }
