@@ -1,7 +1,38 @@
 <!DOCTYPE html>
 <html>
+<head>
+<meta charset="UTF-8">
+<title>ECS Validation Tool</title>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="app.js"></script>
+
+</head>
+
 <body>
-<h1>Hello</h1>
-<button onclick="alert('aaaaah')">Click me</button>
+
+<h2>ECS Validation</h2>
+
+<label>Validation:</label>
+
+<select id="validation">
+<option>1HAND_POS</option>
+<option>2PREP_ALMT</option>
+<option>3WELDING</option>
+<option>4PUNCH</option>
+</select>
+
+<br><br>
+
+<button onclick="exportExcel()">Export Excel</button>
+
+<table border="1" id="preview">
+<tr>
+<th>Building</th>
+<th>ECS Code</th>
+<th>Validation</th>
+</tr>
+</table>
+
 </body>
 </html>
