@@ -1,27 +1,23 @@
 let database = [];
 
-// 1. Load Data
 fetch("database.json")
     .then(res => res.json())
     .then(data => {
         database = data;
         const bSelect = document.getElementById("buildingSelect");
-        
         database.forEach(item => {
             let opt = new Option(item.building, item.building);
             bSelect.add(opt);
         });
-        // Trigger initial ECS list population
         updateEcsDropdown();
     });
 
-// 2. Update ECS list when Building changes
 function updateEcsDropdown() {
     const bValue = document.getElementById("buildingSelect").value;
     const eSelect = document.getElementById("ecsSelect");
     const match = database.find(d => d.building === bValue);
     
-    eSelect.innerHTML = ""; // Clear old options
+    eSelect.innerHTML = ""; 
     if (match) {
         match.ecs_list.forEach(ecs => {
             let opt = new Option(ecs, ecs);
@@ -30,7 +26,6 @@ function updateEcsDropdown() {
     }
 }
 
-// 3. Add to Table
 function addRow() {
     const building = document.getElementById("buildingSelect").value;
     const ecs = document.getElementById("ecsSelect").value;
@@ -38,13 +33,10 @@ function addRow() {
 
     const row = table.insertRow();
     
-    // Column 1: Building
     row.insertCell(0).innerText = building;
-    
-    // Column 2: ECS Code
     row.insertCell(1).innerText = ecs;
 
-    // Column 3: Validation Input
+    // Validation Dropdown
     row.insertCell(2).innerHTML = `
         <select class="val-input">
             <option>1HAND_POS</option>
@@ -52,11 +44,18 @@ function addRow() {
             <option>3WELDING</option>
             <option>4PUNCH</option>
         </select>`;
+
+    // BIG DELETE BUTTON
+    row.insertCell(3).innerHTML = `
+        <button class="delete-btn" onclick="this.parentElement.parentElement.remove()">
+            DELETE
+        </button>`;
 }
 
-// 4. Export
 function exportExcel() {
     const rows = document.querySelectorAll("#ecsTable tbody tr");
+    if(rows.length === 0) return alert("No data to export!");
+
     let data = Array.from(rows).map(tr => ({
         "Building": tr.cells[0].innerText,
         "ECS Code": tr.cells[1].innerText,
@@ -66,5 +65,5 @@ function exportExcel() {
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Collection");
-    XLSX.writeFile(wb, "Data_Collection.xlsx");
+    XLSX.writeFile(wb, `Data_Export_${new Date().toLocaleDateString()}.xlsx`);
 }
