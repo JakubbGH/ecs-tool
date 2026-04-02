@@ -5,70 +5,108 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
     <script src="app.js"></script>
     <style>
-        body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
+        body { font-family: sans-serif; padding: 15px; background: #f4f4f4; }
         
-        /* Big UI Elements */
-        select, button { 
-            padding: 15px; 
-            font-size: 18px; 
-            margin: 5px; 
-            border-radius: 8px;
+        /* Compact Control Bar */
+        .controls { 
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* Two columns to save horizontal space */
+            gap: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        label { font-weight: bold; font-size: 14px; display: block; margin-bottom: 5px; }
+
+        select { 
+            width: 100%; 
+            padding: 12px; 
+            font-size: 16px; 
+            border-radius: 5px; 
             border: 1px solid #ccc;
         }
 
-        .controls { background: #f9f9f9; padding: 20px; border: 2px solid #ddd; border-radius: 10px; }
-
-        .add-btn { background-color: #28a745; color: white; font-weight: bold; cursor: pointer; }
-        
-        .export-btn { 
-            background-color: #007bff; color: white; width: 100%; 
-            margin-top: 20px; font-weight: bold; height: 60px;
+        .add-btn { 
+            grid-column: span 2; /* Button takes full width of the grid */
+            padding: 15px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 18px;
+            cursor: pointer;
         }
 
         /* Table Styling */
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-        th { background-color: #444; color: white; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background: #333; color: white; }
 
-        /* Delete Button */
-        .delete-btn { 
-            background-color: #dc3545; color: white; border: none; 
-            padding: 10px 20px; font-weight: bold; cursor: pointer;
+        .val-select { width: 100%; padding: 8px; font-size: 14px; }
+
+        .del-btn { 
+            background: #dc3545; 
+            color: white; 
+            border: none; 
+            padding: 10px; 
+            width: 100%;
+            font-weight: bold;
+            border-radius: 4px;
         }
-        
-        .val-input { width: 100%; min-width: 150px; }
+
+        .export-btn {
+            position: fixed;
+            bottom: 20px;
+            left: 5%;
+            width: 90%;
+            padding: 20px;
+            background: #007bff;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 -4px 10px rgba(0,0,0,0.2);
+        }
+
+        /* Space for the fixed button at the bottom */
+        .container { margin-bottom: 100px; }
     </style>
 </head>
-
 <body>
 
-    <h2>ECS Field Tool</h2>
+<div class="container">
+    <h2>Field Data Entry</h2>
 
     <div class="controls">
-        <div style="display: flex; flex-direction: column; gap: 10px;">
-            <label><strong>Building:</strong></label>
+        <div>
+            <label>Building</label>
             <select id="buildingSelect" onchange="updateEcsDropdown()"></select>
-
-            <label><strong>ECS Object:</strong></label>
-            <select id="ecsSelect"></select>
-
-            <button class="add-btn" onclick="addRow()">+ ADD ROW TO TABLE</button>
         </div>
+        <div>
+            <label>ECS Code</label>
+            <select id="ecsSelect"></select>
+        </div>
+        <button class="add-btn" onclick="addRow()">+ ADD ROW</button>
     </div>
 
     <table id="ecsTable">
         <thead>
             <tr>
-                <th>Building</th>
-                <th>ECS Code</th>
+                <th>Bldg</th>
+                <th>ECS</th>
                 <th>Validation</th>
-                <th>Remove</th>
+                <th></th>
             </tr>
         </thead>
         <tbody></tbody>
     </table>
+</div>
 
-    <button class="export-btn" onclick="exportExcel()">GENERATE EXCEL FILE</button>
+<button class="export-btn" onclick="exportExcel()">GENERATE EXCEL</button>
 
 </body>
 </html>
