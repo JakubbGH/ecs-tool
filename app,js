@@ -1,55 +1,78 @@
-let database = [];
+// 1. FALLBACK DATA: If the JSON fails to load, the app still works.
+let database = [
+    { "building": "TEST-B1", "ecs_list": ["ECS-TEST-01", "ECS-TEST-02"] }
+];
 
-// Fetch data from your directory
-fetch("database.json")
-    .then(res => {
-        if (!res.ok) throw new Error("Could not load database.json");
-        return res.json();
-    })
-    .then(data => {
-        database = data;
-        const bSelect = document.getElementById("buildingSelect");
+document.addEventListener("DOMContentLoaded", () => {
+    console.log("App Initialized. Fetching database...");
+    loadData();
+});
+
+async function loadData() {
+    try {
+        // 2. USE A TIMESTAMP: This forces GitHub to give you the NEWEST version (prevents caching)
+        const response = await fetch(`./database.json?v=${new Date().getTime()}`);
         
-        // Populate Buildings
-        database.forEach(item => {
-            let opt = new Option(item.building, item.building);
-            bSelect.add(opt);
-        });
+        if (!response.ok) {
+            console.warn("database.json not found, using fallback data.");
+            renderBuildingDropdown();
+            return;
+        }
 
-        // Initialize ECS list for the first building
-        updateEcsDropdown();
-    })
-    .catch(err => {
-        console.error(err);
-        alert("Error: Cannot access database.json. Ensure you are running this on a server/GitHub Pages.");
+        const data = await response.json();
+        console.log("JSON Data Loaded Successfully:", data);
+
+        if (data && data.length > 0) {
+            database = data;
+            renderBuildingDropdown();
+        }
+    } catch (error) {
+        console.error("Critical Fetch Error:", error);
+        renderBuildingDropdown(); // Still render fallback so the UI isn't broken
+    }
+}
+
+function renderBuildingDropdown() {
+    const bSelect = document.getElementById("buildingSelect");
+    if (!bSelect) return console.error("Could not find buildingSelect in HTML");
+
+    bSelect.innerHTML = ""; // Clear "Loading..." or old options
+    
+    database.forEach(item => {
+        let opt = new Option(item.building, item.building);
+        bSelect.add(opt);
     });
+
+    console.log("Building dropdown populated.");
+    updateEcsDropdown();
+}
 
 function updateEcsDropdown() {
     const bValue = document.getElementById("buildingSelect").value;
     const eSelect = document.getElementById("ecsSelect");
     const match = database.find(d => d.building === bValue);
     
-    eSelect.innerHTML = ""; // Clear
+    eSelect.innerHTML = ""; 
     if (match && match.ecs_list) {
         match.ecs_list.forEach(ecs => {
             eSelect.add(new Option(ecs, ecs));
         });
+        console.log(`ECS dropdown updated for ${bValue}`);
     }
 }
 
+// --- ADD ROW & EXCEL LOGIC ---
 function addRow() {
     const b = document.getElementById("buildingSelect").value;
     const e = document.getElementById("ecsSelect").value;
-    if(!b || !e) return;
-
     const tbody = document.querySelector("#ecsTable tbody");
-    const row = tbody.insertRow();
     
+    const row = tbody.insertRow();
     row.innerHTML = `
         <td>${b}</td>
         <td>${e}</td>
         <td>
-            <select class="val-select">
+            <select style="padding:10px; width:100%;">
                 <option>1HAND_POS</option>
                 <option>2PREP_ALMT</option>
                 <option>3WELDING</option>
@@ -57,14 +80,17 @@ function addRow() {
             </select>
         </td>
         <td>
-            <button class="del-btn" onclick="this.parentElement.parentElement.remove()">DEL</button>
+            <button onclick="this.parentElement.parentElement.remove()" 
+                    style="background:#dc3545; color:white; border:none; padding:10px; font-weight:bold; width:100%; border-radius:5px;">
+                DEL
+            </button>
         </td>
     `;
 }
 
 function exportExcel() {
     const rows = document.querySelectorAll("#ecsTable tbody tr");
-    if(rows.length === 0) return alert("No data to export!");
+    if(rows.length === 0) return alert("Add data first!");
 
     let exportData = Array.from(rows).map(tr => ({
         "Building": tr.cells[0].innerText,
@@ -75,5 +101,5 @@ function exportExcel() {
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Collection");
-    XLSX.writeFile(wb, "Data_Collection.xlsx");
+    XLSX.writeFile(wb, "Field_Data.xlsx");
 }
