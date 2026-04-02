@@ -1,21 +1,25 @@
 <body>
 
-    <h2>ECS Validation Tool</h2>
+    <h2>Field Data Collection</h2>
 
-    <div style="background: #f4f4f4; padding: 15px; border-radius: 8px;">
-        <label>Select Building:</label>
-        <select id="buildingSelect"></select>
-        <button onclick="addRow()" style="background: #28a745; color: white;">Add to List</button>
+    <div style="background: #f0f0f0; padding: 15px; border: 1px solid #ccc;">
+        <label>Building:</label>
+        <select id="buildingSelect" onchange="updateEcsDropdown()"></select>
+
+        <label style="margin-left:15px;">ECS Code:</label>
+        <select id="ecsSelect"></select>
+
+        <button onclick="addRow()" style="margin-left:15px;">+ Add to List</button>
     </div>
 
     <br>
 
-    <table id="ecsTable" border="1" style="width: 100%; border-collapse: collapse;">
+    <table id="ecsTable" border="1" style="width: 100%; border-collapse: collapse; text-align: left;">
         <thead>
-            <tr style="background: #eee;">
-                <th>Building (ECS Code)</th>
+            <tr style="background: #444; color: white;">
+                <th>Building</th>
+                <th>ECS Code</th>
                 <th>Validation Status</th>
-                <th>Action</th>
             </tr>
         </thead>
         <tbody>
@@ -23,9 +27,8 @@
     </table>
 
     <br>
-
-    <button onclick="exportExcel()" style="width: 100%; font-weight: bold; background: #007bff; color: white;">
-        Export Final Excel
+    <button onclick="exportExcel()" style="padding: 10px 20px; cursor: pointer;">
+        Save & Export to Excel
     </button>
 
 </body>
