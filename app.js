@@ -1,32 +1,61 @@
 let database = [];
-let loadedBuildings = new Set(); // Tracks buildings already in the table
 
-// ... (keep your loadData function the same) ...
+// Load PLOW Data
+async function loadData() {
+    const statusLabel = document.getElementById("syncStatus");
+    statusLabel.innerText = "Syncing...";
+    try {
+        const cacheBuster = new Date().getTime();
+        const response = await fetch(`./database.json?t=${cacheBuster}`);
+        if (!response.ok) throw new Error("File not found");
+        
+        database = await response.json();
+        
+        const bSelect = document.getElementById("buildingSelect");
+        bSelect.innerHTML = "";
+        database.forEach(item => {
+            bSelect.add(new Option(item.building, item.building));
+        });
+
+        statusLabel.innerText = "PLOW Loaded: " + new Date().toLocaleTimeString();
+        statusLabel.style.color = "green";
+    } catch (error) {
+        statusLabel.innerText = "Load Failed - Check JSON";
+        statusLabel.style.color = "red";
+        console.error(error);
+    }
+}
 
 function loadBuildingToTable() {
-    const bSelect = document.getElementById("buildingSelect");
-    const bValue = bSelect.value;
-    
-    // 1. Check if building is already loaded
-    if (loadedBuildings.has(bValue)) {
-        alert(`Building ${bValue} is already in the table.`);
-        return;
-    }
-
+    const bValue = document.getElementById("buildingSelect").value;
     const match = database.find(d => d.building === bValue);
     const tbody = document.querySelector("#ecsTable tbody");
+
+    // --- DUPLICATE CHECK ---
+    // Look at all existing rows in the table
+    const existingRows = tbody.querySelectorAll("tr");
+    let alreadyExists = false;
+
+    existingRows.forEach(row => {
+        // Check if the first cell (Building name) matches the selection
+        if (row.cells[0].innerText === bValue) {
+            alreadyExists = true;
+        }
+    });
+
+    if (alreadyExists) {
+        alert(`STOP: ${bValue} is already loaded in the table.`);
+        return; // Exit the function so no rows are added
+    }
+    // ------------------------
 
     if (!match || !match.ecs_list) {
         alert("No ECS data found for this building.");
         return;
     }
 
-    // 2. Loop through and add rows
     match.ecs_list.forEach(ecs => {
         const row = tbody.insertRow();
-        // Add a class to the row so we can identify which building it belongs to
-        row.classList.add(`bldg-${bValue}`); 
-        
         row.innerHTML = `
             <td style="font-weight:bold;">${bValue}</td>
             <td>${ecs}</td>
@@ -39,25 +68,24 @@ function loadBuildingToTable() {
                 </select>
             </td>
             <td>
-                <button class="del-btn" onclick="removeRow(this, '${bValue}')">DEL</button>
+                <button class="del-btn" onclick="this.parentElement.parentElement.remove()">DEL</button>
             </td>
         `;
     });
-
-    // 3. Add to the tracking set
-    loadedBuildings.add(bValue);
-    console.log("Current loaded buildings:", Array.from(loadedBuildings));
 }
 
-// Custom remove function to handle the "tracking" logic
-function removeRow(btn, bldgName) {
-    const row = btn.parentElement.parentElement;
-    row.remove();
+function exportExcel() {
+    const rows = document.querySelectorAll("#ecsTable tbody tr");
+    if (rows.length === 0) return alert("Table is empty.");
 
-    // Check if any rows for this building still exist
-    const remainingRows = document.querySelectorAll(`.bldg-${bldgName}`);
-    if (remainingRows.length === 0) {
-        // If all rows for B101 are gone, allow it to be loaded again
-        loadedBuildings.delete(bldgName);
-    }
+    const exportData = Array.from(rows).map(tr => ({
+        "Building": tr.cells[0].innerText,
+        "ECS Code": tr.cells[1].innerText,
+        "Validation": tr.cells[2].querySelector("select").value
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Collection");
+    XLSX.writeFile(wb, `PLOW_Export_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
