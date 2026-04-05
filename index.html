@@ -68,14 +68,14 @@
 
 <div id="mainApp">
     <div class="status-bar">
-        <h2 style="margin:0;">Dashboard</h2>
+        <h2 style="margin:0;">MEH ECS Validation Tool</h2>
         <span id="syncStatus" class="sync-indicator">Syncing...</span>
     </div>
 
     <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
             <label>Select Building</label>
-            <button class="btn-refresh" onclick="loadDataFromCloud()">🔄 Refresh List</button>
+            <button class="btn-refresh" onclick="loadDataFromCloud()">🔄 Refresh Building List</button>
         </div>
         <select id="buildingSelect"><option>Loading...</option></select>
         <button class="btn btn-load" onclick="loadBuildingToTable()">LOAD PLOW DATA</button>
@@ -100,7 +100,7 @@
         </table>
     </div>
 
-    <button class="export-btn" id="mainSaveBtn" onclick="saveToCloud()">UPLOAD TO CLOUD</button>
+    <button class="export-btn" id="mainSaveBtn" onclick="saveToCloud()">SAVE REPORT</button>
 </div>
 
 <script src="app.js"></script>
