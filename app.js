@@ -45,7 +45,7 @@ async function loadDataFromCloud() {
     
     try {
         // Pull documents from the 'buildings' collection
-        const snapshot = await db.collection("buildings").get();
+        const snapshot = await db.collection("Buildings").get();
         database = [];
         
         snapshot.forEach(doc => {
@@ -135,7 +135,7 @@ async function saveToCloud() {
         const firstBldg = reportEntries[0].building;
         const reportID = `${firstBldg}_${Date.now()}`;
 
-        await db.collection("reports").doc(reportID).set({
+        await db.collection("Reports").doc(reportID).set({
             data: reportEntries,
             submittedBy: auth.currentUser.email,
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
