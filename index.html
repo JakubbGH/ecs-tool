@@ -15,35 +15,51 @@
         /* Login UI */
         #loginOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--dark); display: flex; justify-content: center; align-items: center; z-index: 10000; }
         .login-box { background: white; padding: 30px; border-radius: 15px; width: 90%; max-width: 350px; text-align: center; }
-        .login-box input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        .login-box input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
         .login-box button { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
         
         /* Main App */
-        #mainApp { display: none; padding: 15px; padding-bottom: 120px; }
+        #mainApp { display: none; padding: 15px; padding-bottom: 140px; }
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 20px; }
-        .sync-indicator { font-size: 12px; font-weight: bold; padding: 5px; border-radius: 4px; background: #eee; float: right; }
+        .sync-indicator { font-size: 12px; font-weight: bold; padding: 5px 10px; border-radius: 4px; background: #eee; float: right; }
         
         label { display: block; margin-bottom: 8px; font-weight: bold; color: #666; font-size: 14px; }
-        select { width: 100%; padding: 12px; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; margin-bottom: 15px; }
+        select { width: 100%; padding: 12px; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; margin-bottom: 15px; background: white; }
         
         .btn { width: 100%; padding: 15px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 16px; margin-top: 10px; }
         .btn-load { background: var(--success); color: white; }
         
         /* Table */
-        .table-container { overflow-x: auto; background: white; border-radius: 8px; margin-top: 10px; }
+        .table-container { overflow-x: auto; background: white; border-radius: 8px; margin-top: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         table { width: 100%; border-collapse: collapse; min-width: 450px; }
-        th { background: #f1f1f1; padding: 12px; text-align: left; font-size: 13px; }
+        th { background: #f1f1f1; padding: 12px; text-align: left; font-size: 13px; color: #555; }
         td { padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; }
-        .del-btn { background: var(--danger); color: white; border: none; padding: 5px 10px; border-radius: 4px; }
+        .del-btn { background: var(--danger); color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
 
         /* Admin Controls */
         #adminSection { display: none; border-top: 2px dashed #ddd; margin-top: 20px; padding-top: 20px; }
-        .btn-admin { background: #6f42c1; color: white; padding: 10px; font-size: 14px; }
+        .btn-admin { background: #6f42c1; color: white; padding: 12px; font-size: 14px; display: block; width: 100%; margin-bottom: 8px; }
         .btn-export { background: var(--info); }
         .btn-wipe { background: var(--danger); }
 
-        /* Floating Save Button */
-        .export-btn { position: fixed; bottom: 20px; left: 5%; width: 90%; padding: 20px; background: var(--primary); color: white; font-size: 18px; font-weight: bold; border: none; border-radius: 50px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        /* Floating Save Button - Always Visible to logged in users */
+        .export-btn { 
+            position: fixed; 
+            bottom: 20px; 
+            left: 5%; 
+            width: 90%; 
+            padding: 20px; 
+            background: var(--primary); 
+            color: white; 
+            font-size: 18px; 
+            font-weight: bold; 
+            border: none; 
+            border-radius: 50px; 
+            cursor: pointer; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3); 
+            z-index: 999;
+            display: block; 
+        }
     </style>
 </head>
 <body>
@@ -54,21 +70,21 @@
         <input type="email" id="emailInput" placeholder="Email">
         <input type="password" id="passInput" placeholder="Password">
         <button onclick="handleLogin()">Sign In</button>
-        <p id="loginError" style="color:red; display:none; margin-top:10px;"></p>
+        <p id="loginError" style="color:red; display:none; margin-top:15px; font-size: 14px;"></p>
     </div>
 </div>
 
 <div id="mainApp">
     <span id="syncStatus" class="sync-indicator">Offline</span>
-    <h2 style="margin-top:0;">ECS Tool</h2>
+    <h2 style="margin-top:0; color: var(--dark);">ECS Validation</h2>
 
     <div class="card">
         <label>Building Selection</label>
-        <select id="buildingSelect"><option>Loading...</option></select>
-        <button class="btn btn-load" onclick="loadBuildingToTable()">LOAD BUILDING</button>
+        <select id="buildingSelect"><option>Syncing with cloud...</option></select>
+        <button class="btn btn-load" onclick="loadBuildingToTable()">LOAD BUILDING DATA</button>
 
         <div id="adminSection">
-            <label>🛠 Admin Controls</label>
+            <label style="color: #6f42c1;">🛠 Admin Master Controls</label>
             <input type="file" id="csvFileInput" accept=".csv" style="display:none;">
             <button class="btn btn-admin" onclick="document.getElementById('csvFileInput').click()">📂 Import Building List (CSV)</button>
             <button id="uploadCsvBtn" class="btn btn-admin" style="background:#e83e8c; display:none;" onclick="processCSV()">🚀 Confirm Upload</button>
@@ -81,7 +97,7 @@
     <div class="table-container">
         <table id="ecsTable">
             <thead>
-                <tr><th>Building</th><th>ECS Code</th><th>Validation</th><th></th></tr>
+                <tr><th>Building</th><th>ECS Code</th><th>Validation</th><th>Action</th></tr>
             </thead>
             <tbody></tbody>
         </table>
