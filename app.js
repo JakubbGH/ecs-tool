@@ -146,18 +146,46 @@ async function processCSV() {
 async function exportAllReports() {
     try {
         const snap = await db.collection("reports").get();
-        let csv = "Building,ECS,Status,User,Time\n";
+        
+        if (snap.empty) {
+            return alert("No reports found in the cloud.");
+        }
+
+        let csv = "Building,ECS Code,Status,Tech User,Timestamp\n";
+        
         snap.forEach(doc => {
-            const r = doc.data();
-            const time = r.timestamp ? r.timestamp.toDate().toLocaleString() : "";
-            r.data.forEach(i => csv += `"${i.building}","${i.ecs_code}","${i.status}","${r.user}","${time}"\n`);
+            const report = doc.data();
+            const time = report.timestamp ? report.timestamp.toDate().toLocaleString() : "N/A";
+            const user = report.user || "Unknown User";
+
+            // SAFETY CHECK: Only loop if 'data' exists and is an array
+            if (report.data && Array.isArray(report.data)) {
+                report.data.forEach(item => {
+                    // Use quotes to prevent commas in names from breaking the CSV
+                    csv += `"${item.building || "N/A"}","${item.ecs_code || "N/A"}","${item.status || "N/A"}","${user}","${time}"\n`;
+                });
+            } else {
+                console.warn(`Skipping report ${doc.id}: 'data' field is missing or invalid.`);
+            }
         });
-        const blob = new Blob([csv], { type: 'text/csv' });
+
+        // Create the download
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = "Master_Export.csv";
+        const url = URL.createObjectURL(blob);
+        
+        link.setAttribute("href", url);
+        link.setAttribute("download", `Master_Export_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
         link.click();
-    } catch (e) { alert(e.message); }
+        document.body.removeChild(link);
+        
+        alert("✅ Export successful! Check your downloads folder.");
+
+    } catch (e) { 
+        console.error("Full Export Error:", e);
+        alert("❌ Export failed: " + e.message); 
+    }
 }
 
 async function wipeAllBuildings() {
