@@ -150,7 +150,7 @@ async function clearAllReports() {
 }
 
 async function wipeAllBuildings() {
-    if (!confirm("Wipe master building list?")) return;
+    if (!confirm("Clear master building list?")) return;
     try {
         const snap = await db.collection("buildings").get();
         const batch = db.batch();
