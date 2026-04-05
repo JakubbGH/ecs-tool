@@ -1,12 +1,12 @@
 // --- 1. CONFIGURATION ---
-// Replace these with the keys from your Firebase Console (Project Settings)
+// Replace these with the actual keys from your Firebase Console
 const firebaseConfig = {
-    apiKey: "AIzaSyDBkF2EJxgk4buiqUak-ZCLfKcPzpX7gsw",
-    authDomain: "ecs-tool.firebaseapp.com",
-    projectId: "ecs-tool",
-    storageBucket: "ecs-tool.firebasestorage.app",
-    messagingSenderId: "796028644982",
-    appId: "1:796028644982:web:d6953c3ce305734d7a3957"
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
 };
 
 // Initialize Firebase Services
@@ -14,7 +14,7 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-let database = []; // Will hold building data pulled from Cloud
+let database = []; // Local cache of the building list
 
 // --- 2. LOGIN LOGIC ---
 async function handleLogin() {
@@ -23,14 +23,14 @@ async function handleLogin() {
     const errorMsg = document.getElementById("loginError");
 
     try {
-        // Securely authenticate with Firebase
+        // Authenticate with Firebase
         await auth.signInWithEmailAndPassword(email, pass);
         
-        // Hide login, show app
+        // UI Switch
         document.getElementById("loginOverlay").style.display = "none";
         document.getElementById("mainApp").style.display = "block";
         
-        // Trigger the Cloud Data pull
+        // Fetch building data from Cloud
         loadDataFromCloud();
     } catch (error) {
         errorMsg.style.display = "block";
@@ -38,30 +38,27 @@ async function handleLogin() {
     }
 }
 
-// --- 3. CLOUD DATA FETCH ---
+// --- 3. FETCH BUILDINGS (From Firestore) ---
 async function loadDataFromCloud() {
     const statusLabel = document.getElementById("syncStatus");
-    statusLabel.innerText = "Syncing from Cloud...";
+    statusLabel.innerText = "Syncing...";
     
     try {
-        // Fetch the 'buildings' collection from Firestore
+        // Pull documents from the 'buildings' collection
         const snapshot = await db.collection("buildings").get();
-        
-        database = []; // Clear current list
+        database = [];
         
         snapshot.forEach(doc => {
-            // doc.id is the Building Name (e.g., B101)
-            // doc.data().ecs_list is the Array of codes
             database.push({
                 building: doc.id,
                 ecs_list: doc.data().ecs_list || []
             });
         });
 
-        // Populate the dropdown
+        // Populate Dropdown
         const bSelect = document.getElementById("buildingSelect");
         bSelect.innerHTML = "";
-        database.sort((a, b) => a.building.localeCompare(b.building)); // Sort A-Z
+        database.sort((a, b) => a.building.localeCompare(b.building)); // Alphabetical
         
         database.forEach(item => {
             bSelect.add(new Option(item.building, item.building));
@@ -70,23 +67,22 @@ async function loadDataFromCloud() {
         statusLabel.innerText = "Cloud Active: " + new Date().toLocaleTimeString();
         statusLabel.style.color = "green";
     } catch (error) {
-        console.error("Cloud Error:", error);
-        statusLabel.innerText = "DATABASE LOCKED";
+        statusLabel.innerText = "SYNC ERROR";
         statusLabel.style.color = "red";
-        alert("Permission Denied: You do not have access to the database.");
+        console.error("Firestore Read Error:", error);
     }
 }
 
-// --- 4. TABLE LOGIC ---
+// --- 4. TABLE LOGIC (Load Building) ---
 function loadBuildingToTable() {
     const bValue = document.getElementById("buildingSelect").value.trim();
     const tbody = document.querySelector("#ecsTable tbody");
     const existingRows = tbody.getElementsByTagName("tr");
 
-    // Duplicate Check: Scan table for existing building name
+    // BLOCK DUPLICATES: Check if building name is already in column 1
     for (let i = 0; i < existingRows.length; i++) {
         if (existingRows[i].cells[0].innerText.trim() === bValue) {
-            alert(`Duplicate: ${bValue} is already in the table.`);
+            alert(`STOP: ${bValue} is already loaded.`);
             return;
         }
     }
@@ -114,19 +110,48 @@ function loadBuildingToTable() {
     });
 }
 
-// --- 5. EXCEL EXPORT ---
-function exportExcel() {
+// --- 5. SAVE TO CLOUD (Upload Report) ---
+async function saveToCloud() {
     const rows = document.querySelectorAll("#ecsTable tbody tr");
-    if (rows.length === 0) return alert("No data to save.");
+    const btn = document.querySelector(".export-btn");
 
-    const exportData = Array.from(rows).map(tr => ({
-        "Building": tr.cells[0].innerText,
-        "ECS Code": tr.cells[1].innerText,
-        "Validation": tr.cells[2].querySelector("select").value
+    if (rows.length === 0) {
+        alert("Table is empty. Add a building first.");
+        return;
+    }
+
+    // Prepare the data package
+    const reportEntries = Array.from(rows).map(tr => ({
+        building: tr.cells[0].innerText,
+        ecs_code: tr.cells[1].innerText,
+        status: tr.cells[2].querySelector("select").value
     }));
 
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "FieldReport");
-    XLSX.writeFile(wb, `MEH_Validation_${new Date().toISOString().split('T')[0]}.xlsx`);
+    try {
+        btn.innerText = "UPLOADING...";
+        btn.disabled = true;
+
+        // Create a unique ID using Building name and current time
+        const firstBldg = reportEntries[0].building;
+        const reportID = `${firstBldg}_${Date.now()}`;
+
+        await db.collection("reports").doc(reportID).set({
+            data: reportEntries,
+            submittedBy: auth.currentUser.email,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        alert("Upload Successful! Data is now in the Cloud.");
+        btn.innerText = "UPLOAD TO CLOUD";
+        btn.disabled = false;
+
+        // Optional: Clear table after success to prevent double-upload
+        // tbody.innerHTML = ""; 
+
+    } catch (error) {
+        console.error("Upload Error:", error);
+        alert("Cloud Save Failed: " + error.message);
+        btn.innerText = "UPLOAD TO CLOUD";
+        btn.disabled = false;
+    }
 }
