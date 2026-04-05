@@ -8,153 +8,124 @@ const firebaseConfig = {
     appId: "1:796028644982:web:d6953c3ce305734d7a3957"
 };
 
-// Initialize Firebase Services
+const ADMIN_EMAIL = "admin@ecs-tool.com";
+
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+let database = [];
 
-let database = []; // Local cache of the building list
-
-// --- 2. LOGIN LOGIC ---
+// --- 2. LOGIN & AUTH CHECK ---
 async function handleLogin() {
     const email = document.getElementById("emailInput").value;
     const pass = document.getElementById("passInput").value;
     const errorMsg = document.getElementById("loginError");
 
     try {
-        await auth.signInWithEmailAndPassword(email, pass);
-        
-        // UI Switch
+        const userCredential = await auth.signInWithEmailAndPassword(email, pass);
+        const user = userCredential.user;
+
+        // Safety Feature: Show Admin Section ONLY for your email
+        if (user.email === ADMIN_EMAIL) {
+            document.getElementById("adminSection").style.display = "block";
+        }
+
         document.getElementById("loginOverlay").style.display = "none";
         document.getElementById("mainApp").style.display = "block";
-        
-        // Fetch building data from Cloud
         loadDataFromCloud();
     } catch (error) {
         errorMsg.style.display = "block";
-        errorMsg.innerText = "Login Failed: " + error.message;
+        errorMsg.innerText = error.message;
     }
 }
 
-// --- 3. FETCH BUILDINGS (From Firestore) ---
+// --- 3. FETCH BUILDINGS ---
 async function loadDataFromCloud() {
     const statusLabel = document.getElementById("syncStatus");
     statusLabel.innerText = "Syncing...";
-    
     try {
-        // CHANGED TO LOWERCASE: "buildings"
         const snapshot = await db.collection("buildings").get();
-        
-        if (snapshot.empty) {
-            console.warn("No documents found in 'buildings' collection. Check your Firestore naming.");
-            statusLabel.innerText = "DATABASE EMPTY";
-            return;
-        }
-
         database = [];
         snapshot.forEach(doc => {
-            console.log("Fetched Building:", doc.id); // Check console to see if IDs appear
-            database.push({
-                building: doc.id,
-                ecs_list: doc.data().ecs_list || []
-            });
+            database.push({ building: doc.id, ecs_list: doc.data().ecs_list || [] });
         });
-
-        // Populate Dropdown
         const bSelect = document.getElementById("buildingSelect");
         bSelect.innerHTML = "";
         database.sort((a, b) => a.building.localeCompare(b.building));
-        
-        database.forEach(item => {
-            bSelect.add(new Option(item.building, item.building));
-        });
-
+        database.forEach(item => bSelect.add(new Option(item.building, item.building)));
         statusLabel.innerText = "Cloud Active: " + new Date().toLocaleTimeString();
         statusLabel.style.color = "green";
     } catch (error) {
         statusLabel.innerText = "SYNC ERROR";
-        statusLabel.style.color = "red";
-        console.error("Firestore Read Error:", error);
+        console.error(error);
     }
 }
 
-// --- 4. TABLE LOGIC (Load Building) ---
+// --- 4. TABLE LOGIC ---
 function loadBuildingToTable() {
-    const bValue = document.getElementById("buildingSelect").value.trim();
+    const bValue = document.getElementById("buildingSelect").value;
     const tbody = document.querySelector("#ecsTable tbody");
-    const existingRows = tbody.getElementsByTagName("tr");
-
-    for (let i = 0; i < existingRows.length; i++) {
-        if (existingRows[i].cells[0].innerText.trim() === bValue) {
-            alert(`STOP: ${bValue} is already loaded.`);
-            return;
-        }
-    }
-
     const match = database.find(d => d.building === bValue);
-    if (!match) {
-        alert("Building data not found in local cache.");
-        return;
-    }
+    if (!match) return;
 
     match.ecs_list.forEach(ecs => {
         const row = tbody.insertRow();
         row.innerHTML = `
-            <td style="font-weight:bold;">${bValue}</td>
-            <td>${ecs}</td>
-            <td>
-                <select style="width:100%; padding:8px;">
-                    <option>1HAND_POS</option>
-                    <option>2PREP_ALMT</option>
-                    <option>3WELDING</option>
-                    <option>4PUNCH</option>
-                </select>
-            </td>
-            <td>
-                <button class="del-btn" onclick="this.parentElement.parentElement.remove()">DEL</button>
-            </td>
+            <td>${bValue}</td><td>${ecs}</td>
+            <td><select><option>1HAND_POS</option><option>2PREP_ALMT</option><option>3WELDING</option><option>4PUNCH</option></select></td>
+            <td><button class="del-btn" onclick="this.parentElement.parentElement.remove()">DEL</button></td>
         `;
     });
 }
 
-// --- 5. SAVE TO CLOUD (Upload Report) ---
+// --- 5. SAVE REPORT ---
 async function saveToCloud() {
     const rows = document.querySelectorAll("#ecsTable tbody tr");
+    if (rows.length === 0) return alert("Table is empty");
     const btn = document.querySelector(".export-btn");
-
-    if (rows.length === 0) {
-        alert("Table is empty. Add a building first.");
-        return;
-    }
-
-    const reportEntries = Array.from(rows).map(tr => ({
+    const reportData = Array.from(rows).map(tr => ({
         building: tr.cells[0].innerText,
         ecs_code: tr.cells[1].innerText,
         status: tr.cells[2].querySelector("select").value
     }));
 
     try {
-        btn.innerText = "UPLOADING...";
         btn.disabled = true;
-
-        const firstBldg = reportEntries[0].building;
-        const reportID = `${firstBldg}_${Date.now()}`;
-
-        // CHANGED TO LOWERCASE: "reports"
+        btn.innerText = "UPLOADING...";
+        const reportID = `${reportData[0].building}_${Date.now()}`;
         await db.collection("reports").doc(reportID).set({
-            data: reportEntries,
-            submittedBy: auth.currentUser.email,
+            data: reportData,
+            user: auth.currentUser.email,
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
+        alert("Saved to Cloud!");
+        btn.disabled = false;
+        btn.innerText = "UPLOAD TO CLOUD";
+    } catch (e) { alert(e.message); btn.disabled = false; }
+}
 
-        alert("Upload Successful!");
-        btn.innerText = "UPLOAD TO CLOUD";
-        btn.disabled = false;
-        
-    } catch (error) {
-        console.error("Upload Error:", error);
-        alert("Cloud Save Failed: " + error.message);
-        btn.innerText = "UPLOAD TO CLOUD";
-        btn.disabled = false;
-    }
+// --- 6. ADMIN CSV UPLOAD ---
+document.getElementById('csvFileInput').addEventListener('change', (e) => {
+    if (e.target.files.length > 0) document.getElementById('uploadCsvBtn').style.display = 'block';
+});
+
+async function processCSV() {
+    const file = document.getElementById('csvFileInput').files[0];
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const rows = e.target.result.split('\n').filter(r => r.trim() !== '');
+        const batch = db.batch();
+        // Skip header, loop rows
+        for (let i = 1; i < rows.length; i++) {
+            const cols = rows[i].split(',');
+            if (cols.length < 2) continue;
+            const bName = cols[0].trim();
+            const codes = cols[1].replace(/"/g, '').split(';').map(s => s.trim());
+            batch.set(db.collection("buildings").doc(bName), { ecs_list: codes });
+        }
+        await batch.commit();
+        alert("Database Updated!");
+        location.reload();
+    };
+    reader.readAsText(file);
 }
