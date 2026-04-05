@@ -5,12 +5,12 @@ window.onload = () => { loadData(); };
 
 // Paste the Config you copied from the Firebase Console here:
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "your-app.firebaseapp.com",
-    projectId: "your-app",
-    storageBucket: "your-app.appspot.com",
-    messagingSenderId: "...",
-    appId: "..."
+    apiKey: "AIzaSyDBkF2EJxgk4buiqUak-ZCLfKcPzpX7gsw",
+    authDomain: "ecs-tool.firebaseapp.com",
+    projectId: "ecs-tool",
+    storageBucket: "ecs-tool.firebasestorage.app",
+    messagingSenderId: "796028644982",
+    appId: "1:796028644982:web:d6953c3ce305734d7a3957"
 };
 
 // Initialize Firebase
