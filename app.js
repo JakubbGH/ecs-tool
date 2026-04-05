@@ -1,5 +1,4 @@
 // --- 1. CONFIGURATION ---
-// Replace these with the actual keys from your Firebase Console
 const firebaseConfig = {
     apiKey: "AIzaSyDBkF2EJxgk4buiqUak-ZCLfKcPzpX7gsw",
     authDomain: "ecs-tool.firebaseapp.com",
@@ -23,7 +22,6 @@ async function handleLogin() {
     const errorMsg = document.getElementById("loginError");
 
     try {
-        // Authenticate with Firebase
         await auth.signInWithEmailAndPassword(email, pass);
         
         // UI Switch
@@ -44,11 +42,18 @@ async function loadDataFromCloud() {
     statusLabel.innerText = "Syncing...";
     
     try {
-        // Pull documents from the 'buildings' collection
-        const snapshot = await db.collection("Buildings").get();
-        database = [];
+        // CHANGED TO LOWERCASE: "buildings"
+        const snapshot = await db.collection("buildings").get();
         
+        if (snapshot.empty) {
+            console.warn("No documents found in 'buildings' collection. Check your Firestore naming.");
+            statusLabel.innerText = "DATABASE EMPTY";
+            return;
+        }
+
+        database = [];
         snapshot.forEach(doc => {
+            console.log("Fetched Building:", doc.id); // Check console to see if IDs appear
             database.push({
                 building: doc.id,
                 ecs_list: doc.data().ecs_list || []
@@ -58,7 +63,7 @@ async function loadDataFromCloud() {
         // Populate Dropdown
         const bSelect = document.getElementById("buildingSelect");
         bSelect.innerHTML = "";
-        database.sort((a, b) => a.building.localeCompare(b.building)); // Alphabetical
+        database.sort((a, b) => a.building.localeCompare(b.building));
         
         database.forEach(item => {
             bSelect.add(new Option(item.building, item.building));
@@ -79,7 +84,6 @@ function loadBuildingToTable() {
     const tbody = document.querySelector("#ecsTable tbody");
     const existingRows = tbody.getElementsByTagName("tr");
 
-    // BLOCK DUPLICATES: Check if building name is already in column 1
     for (let i = 0; i < existingRows.length; i++) {
         if (existingRows[i].cells[0].innerText.trim() === bValue) {
             alert(`STOP: ${bValue} is already loaded.`);
@@ -88,7 +92,10 @@ function loadBuildingToTable() {
     }
 
     const match = database.find(d => d.building === bValue);
-    if (!match) return;
+    if (!match) {
+        alert("Building data not found in local cache.");
+        return;
+    }
 
     match.ecs_list.forEach(ecs => {
         const row = tbody.insertRow();
@@ -120,7 +127,6 @@ async function saveToCloud() {
         return;
     }
 
-    // Prepare the data package
     const reportEntries = Array.from(rows).map(tr => ({
         building: tr.cells[0].innerText,
         ecs_code: tr.cells[1].innerText,
@@ -131,23 +137,20 @@ async function saveToCloud() {
         btn.innerText = "UPLOADING...";
         btn.disabled = true;
 
-        // Create a unique ID using Building name and current time
         const firstBldg = reportEntries[0].building;
         const reportID = `${firstBldg}_${Date.now()}`;
 
-        await db.collection("Reports").doc(reportID).set({
+        // CHANGED TO LOWERCASE: "reports"
+        await db.collection("reports").doc(reportID).set({
             data: reportEntries,
             submittedBy: auth.currentUser.email,
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        alert("Upload Successful! Data is now in the Cloud.");
+        alert("Upload Successful!");
         btn.innerText = "UPLOAD TO CLOUD";
         btn.disabled = false;
-
-        // Optional: Clear table after success to prevent double-upload
-        // tbody.innerHTML = ""; 
-
+        
     } catch (error) {
         console.error("Upload Error:", error);
         alert("Cloud Save Failed: " + error.message);
