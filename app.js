@@ -14,6 +14,7 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 let database = [];
 
+// Session persistence ensures the user is logged out when the tab is closed
 auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
 
 auth.onAuthStateChanged((user) => {
@@ -63,6 +64,7 @@ function loadBuildingToTable() {
     const tbody = document.querySelector("#ecsTable tbody");
     if (!bValue || bValue === "Loading...") return;
 
+    // Check if this building is already in the table to prevent massive duplicate lists
     const existing = Array.from(tbody.rows).some(row => row.cells[0].innerText === bValue);
     if (existing) return alert(`Building ${bValue} is already loaded.`);
 
@@ -76,7 +78,6 @@ function loadBuildingToTable() {
     }
 }
 
-// NEW: ADD OPPORTUNISTIC ENTRY FUNCTION
 function addOpportunisticEntry() {
     const bName = prompt("Enter Building Name:");
     if (!bName) return;
@@ -84,6 +85,15 @@ function addOpportunisticEntry() {
     if (!ecsCode) return;
 
     const tbody = document.querySelector("#ecsTable tbody");
+    
+    // Check if this specific ECS code already exists in the table
+    const duplicate = Array.from(tbody.rows).some(row => 
+        row.cells[0].innerText.toUpperCase() === bName.toUpperCase() && 
+        row.cells[1].innerText.toUpperCase() === ecsCode.toUpperCase()
+    );
+
+    if (duplicate) return alert("This item is already in your report.");
+
     const row = tbody.insertRow();
     row.innerHTML = `
         <td style="font-weight:bold; color:var(--info);">${bName.toUpperCase()}</td>
@@ -98,20 +108,38 @@ async function saveToCloud() {
     const rows = document.querySelectorAll("#ecsTable tbody tr");
     const btn = document.getElementById("mainSaveBtn");
     if (rows.length === 0) return alert("Table is empty.");
-    const reportData = Array.from(rows).map(tr => ({ building: tr.cells[0].innerText, ecs_code: tr.cells[1].innerText, status: tr.cells[2].querySelector("select").value }));
+
+    const reportData = Array.from(rows).map(tr => ({ 
+        building: tr.cells[0].innerText, 
+        ecs_code: tr.cells[1].innerText, 
+        status: tr.cells[2].querySelector("select").value 
+    }));
+
     try {
         btn.disabled = true;
         btn.innerText = "SAVING REPORT...";
-        const reportID = `${reportData[0].building}_${Date.now()}`;
-        await db.collection("reports").doc(reportID).set({ data: reportData, user: auth.currentUser.email, timestamp: firebase.firestore.FieldValue.serverTimestamp() });
+        const reportID = `${reportData[0].building.replace(/\s+/g, '_')}_${Date.now()}`;
+        
+        await db.collection("reports").doc(reportID).set({ 
+            data: reportData, 
+            user: auth.currentUser.email, 
+            timestamp: firebase.firestore.FieldValue.serverTimestamp() 
+        });
+        
         alert("Success: Report saved.");
         document.querySelector("#ecsTable tbody").innerHTML = "";
-    } catch (e) { alert("Error: " + e.message); }
-    btn.disabled = false;
-    btn.innerText = "SAVE REPORT";
+    } catch (e) { 
+        alert("Error: " + e.message); 
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "SAVE REPORT";
+    }
 }
 
-document.getElementById('csvFileInput').addEventListener('change', (e) => { if (e.target.files.length > 0) document.getElementById('uploadCsvBtn').style.display = 'block'; });
+// ADMIN FUNCTIONS BELOW
+document.getElementById('csvFileInput').addEventListener('change', (e) => { 
+    if (e.target.files.length > 0) document.getElementById('uploadCsvBtn').style.display = 'block'; 
+});
 
 async function processCSV() {
     const btn = document.getElementById('uploadCsvBtn');
@@ -143,7 +171,7 @@ async function exportAllReports() {
         let csv = "Building,ECS,Status,User,Time\n";
         snap.forEach(doc => {
             const r = doc.data();
-            const time = r.timestamp ? r.timestamp.toDate().toLocaleString() : "";
+            const time = r.timestamp ? r.timestamp.toDate().toLocaleString() : "N/A";
             if (r.data && Array.isArray(r.data)) {
                 r.data.forEach(i => csv += `"${i.building}","${i.ecs_code}","${i.status}","${r.user}","${time}"\n`);
             }
@@ -151,7 +179,7 @@ async function exportAllReports() {
         const blob = new Blob([csv], { type: 'text/csv' });
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob);
-        link.download = `Export_${Date.now()}.csv`;
+        link.download = `Export_${new Date().toISOString().split('T')[0]}.csv`;
         link.click();
     } catch (e) { alert("Export error: " + e.message); }
 }
