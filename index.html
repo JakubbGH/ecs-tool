@@ -68,6 +68,12 @@
             margin-bottom: 6px;
         }
 
+        hr {
+            margin: 18px 0;
+            border: none;
+            border-top: 1px solid var(--border);
+        }
+
         .login-overlay {
             position: fixed;
             inset: 0;
@@ -158,6 +164,13 @@
             align-items: end;
         }
 
+        .grid-two {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            align-items: end;
+        }
+
         .actions {
             display: flex;
             flex-wrap: wrap;
@@ -234,6 +247,14 @@
             color: var(--primary);
         }
 
+        .admin-box {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+            margin-top: 14px;
+            background: #fafafa;
+        }
+
         .muted {
             color: var(--muted);
             font-size: 13px;
@@ -248,8 +269,16 @@
             background: #fafafa;
         }
 
+        .manual-box {
+            padding: 14px;
+            border-radius: 12px;
+            background: #ffffff;
+            border: 1px solid var(--border);
+        }
+
         @media (max-width: 800px) {
-            .grid {
+            .grid,
+            .grid-two {
                 grid-template-columns: 1fr;
             }
 
@@ -344,7 +373,7 @@
                 </div>
 
                 <p class="muted">
-                    Select a room, then select one ECS code available in that room.
+                    Uses the main ECS master list.
                 </p>
             </div>
 
@@ -386,8 +415,64 @@
                 </div>
 
                 <p class="muted">
-                    Select from the permanent master list. No manual typing required.
+                    Uses the separate opportunistic master list.
                 </p>
+
+                <hr>
+
+                <div class="manual-box">
+                    <h3>Manual Opportunistic Entry</h3>
+
+                    <p class="muted">
+                        Use this only if the ECS is not available in the opportunistic dropdown list.
+                    </p>
+
+                    <div class="grid">
+                        <div>
+                            <label for="manualOppBuilding">Building</label>
+                            <input id="manualOppBuilding" type="text" placeholder="Example: B005">
+                        </div>
+
+                        <div>
+                            <label for="manualOppRoom">Room ID</label>
+                            <input id="manualOppRoom" type="text" placeholder="Example: R3162">
+                        </div>
+
+                        <div>
+                            <label for="manualOppEcs">ECS Code</label>
+                            <input id="manualOppEcs" type="text" placeholder="Example: ECS-0062">
+                        </div>
+                    </div>
+
+                    <div class="grid" style="margin-top:14px;">
+                        <div>
+                            <label for="manualOppCommodity">Commodity</label>
+                            <select id="manualOppCommodity">
+                                <option value="">Select commodity...</option>
+                                <option value="SUPPORT">SUPPORT</option>
+                                <option value="EQUIP">EQUIP</option>
+                                <option value="PCON">PCON</option>
+                                <option value="CLAMPVALVE">CLAMPVALVE</option>
+                                <option value="CABLE">CABLE</option>
+                                <option value="INLINE">INLINE</option>
+                                <option value="DUCT">DUCT</option>
+                                <option value="PIPE">PIPE</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <button class="success-btn" onclick="addManualOpportunisticEntry()">
+                                ADD MANUAL OPPORTUNISTIC ECS
+                            </button>
+                        </div>
+
+                        <div>
+                            <button class="secondary-btn" onclick="clearManualOpportunisticEntry()">
+                                CLEAR MANUAL ENTRY
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -428,34 +513,60 @@
             <h2>Admin</h2>
 
             <p class="muted">
-                Upload CSV format:
+                CSV format for both uploads:
                 <strong>Building,Room ID,ECS Code,Commodity</strong>
             </p>
 
-            <input id="csvFileInput" type="file" accept=".csv">
+            <div class="admin-box">
+                <h3>Main ECS Master List</h3>
 
-            <div class="actions">
-                <button id="uploadCsvBtn" class="primary-btn" onclick="processCSV()" style="display:none;">
-                    UPLOAD CSV TO DATABASE
-                </button>
+                <input id="mainCsvFileInput" type="file" accept=".csv">
 
-                <button class="secondary-btn" onclick="exportAllReports()">
-                    EXPORT ALL REPORTS
-                </button>
+                <div class="actions">
+                    <button id="uploadMainCsvBtn" class="primary-btn" onclick="processMainCSV()" style="display:none;">
+                        UPLOAD MAIN ECS CSV
+                    </button>
 
-                <button class="danger-btn" onclick="clearAllReports()">
-                    CLEAR ALL REPORTS
-                </button>
+                    <button class="danger-btn" onclick="wipeMainMasterList()">
+                        DELETE MAIN ECS MASTER LIST
+                    </button>
+                </div>
+            </div>
 
-                <button class="danger-btn" onclick="wipeMasterList()">
-                    WIPE MASTER BUILDING / ROOM / ECS LIST
-                </button>
+            <div class="admin-box">
+                <h3>Opportunistic Master List</h3>
+
+                <input id="opportunisticCsvFileInput" type="file" accept=".csv">
+
+                <div class="actions">
+                    <button id="uploadOpportunisticCsvBtn" class="primary-btn" onclick="processOpportunisticCSV()" style="display:none;">
+                        UPLOAD OPPORTUNISTIC CSV
+                    </button>
+
+                    <button class="danger-btn" onclick="wipeOpportunisticMasterList()">
+                        DELETE OPPORTUNISTIC LIST
+                    </button>
+                </div>
+            </div>
+
+            <div class="admin-box">
+                <h3>Reports</h3>
+
+                <div class="actions">
+                    <button class="secondary-btn" onclick="exportAllReports()">
+                        EXPORT ALL REPORTS
+                    </button>
+
+                    <button class="danger-btn" onclick="clearAllReports()">
+                        CLEAR ALL REPORTS
+                    </button>
+                </div>
             </div>
         </section>
 
     </main>
 
-    <script src="app.js?v=4"></script>
+    <script src="app.js?v=6"></script>
 
 </body>
 </html>
