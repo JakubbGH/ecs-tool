@@ -178,7 +178,11 @@ async function getBuildingsFromCollection(collectionName) {
 
     snap.forEach(doc => {
         const data = doc.data();
-        if (data.building) buildings.add(String(data.building).trim());
+        const building = cleanCell(data.building);
+
+        if (building) {
+            buildings.add(building);
+        }
     });
 
     return [...buildings];
@@ -212,7 +216,7 @@ async function loadRoomsForBuilding() {
 
         if (rooms.length === 0) {
             roomPicker.style.display = "none";
-            return alert("No main ECS rooms found for this building.");
+            return alert("No main ECS rooms with ECS codes found for this building.");
         }
 
         roomPicker.style.display = "block";
@@ -312,7 +316,7 @@ async function loadOpportunisticRooms() {
         });
 
         if (rooms.length === 0) {
-            roomSelect.innerHTML = `<option value="">No opportunistic rooms found</option>`;
+            roomSelect.innerHTML = `<option value="">No opportunistic rooms with ECS found</option>`;
         }
     } catch (e) {
         alert("Opportunistic room load error: " + e.message);
@@ -440,14 +444,21 @@ async function getRoomsForBuilding(collectionName, building) {
         .where("building", "==", building)
         .get();
 
-    const rooms = new Set();
+    const roomsWithEcs = new Set();
 
     snap.forEach(doc => {
         const data = doc.data();
-        if (data.room_id) rooms.add(String(data.room_id).trim());
+
+        const roomId = cleanCell(data.room_id);
+        const ecsCode = cleanCell(data.ecs_code);
+
+        // Only show room IDs that have at least one valid ECS code
+        if (roomId && ecsCode) {
+            roomsWithEcs.add(roomId);
+        }
     });
 
-    return [...rooms].sort((a, b) => a.localeCompare(b));
+    return [...roomsWithEcs].sort((a, b) => a.localeCompare(b));
 }
 
 async function getEcsForBuildingRoom(collectionName, building, roomId) {
@@ -461,12 +472,18 @@ async function getEcsForBuildingRoom(collectionName, building, roomId) {
     snap.forEach(doc => {
         const data = doc.data();
 
+        const ecsCode = cleanCell(data.ecs_code);
+        const commodity = normalizeCommodity(data.commodity);
+
+        // Skip blank ECS rows
+        if (!ecsCode) return;
+
         items.push({
             id: doc.id,
-            building: data.building,
-            room_id: data.room_id,
-            ecs_code: data.ecs_code,
-            commodity: normalizeCommodity(data.commodity)
+            building: cleanCell(data.building),
+            room_id: cleanCell(data.room_id),
+            ecs_code: ecsCode,
+            commodity: commodity
         });
     });
 
@@ -639,6 +656,7 @@ async function processCSVUpload({ fileInputId, buttonId, collectionName, label }
                 const ecsCode = cleanCell(cols[ecsIndex]);
                 const commodity = normalizeCommodity(cols[commodityIndex]);
 
+                // Skip rows that do not have a valid ECS code
                 if (!building || !roomId || !ecsCode || !commodity) continue;
 
                 if (!GATE_STATUSES_BY_COMMODITY[commodity]) {
@@ -655,7 +673,7 @@ async function processCSVUpload({ fileInputId, buttonId, collectionName, label }
             }
 
             if (ecsRows.length === 0) {
-                return alert("No valid rows found in CSV.");
+                return alert("No valid rows with ECS codes found in CSV.");
             }
 
             await uploadRowsToCollection(collectionName, ecsRows);
