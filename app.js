@@ -15,6 +15,7 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
 let database = [];
+let selectedBuildingData = null;
 
 const GATE_STATUSES_BY_COMMODITY = {
     SUPPORT: ["1ENDS_CUT", "2PREP_TACK", "3WELDING"],
@@ -38,11 +39,7 @@ auth.onAuthStateChanged((user) => {
         loginOverlay.style.display = "none";
         mainApp.style.display = "block";
 
-        if (user.email === ADMIN_EMAIL) {
-            adminSection.style.display = "block";
-        } else {
-            adminSection.style.display = "none";
-        }
+        adminSection.style.display = user.email === ADMIN_EMAIL ? "block" : "none";
 
         loadDataFromCloud();
     } else {
@@ -75,11 +72,7 @@ async function handleLogin() {
 }
 
 async function handleLogout() {
-    try {
-        await auth.signOut();
-    } catch (e) {
-        alert("Logout error: " + e.message);
-    }
+    await auth.signOut();
 }
 
 async function loadDataFromCloud() {
@@ -94,7 +87,7 @@ async function loadDataFromCloud() {
 
         database = snap.docs.map(doc => ({
             building: doc.id,
-            ecs_list: doc.data().ecs_list || []
+            ecs_list: normalizeEcsList(doc.data().ecs_list || [])
         }));
 
         const bSelect = document.getElementById("buildingSelect");
@@ -121,90 +114,85 @@ async function loadDataFromCloud() {
     }
 }
 
-function loadBuildingToTable() {
+function loadRoomsForBuilding() {
     const bValue = document.getElementById("buildingSelect").value;
-    const ecsPicker = document.getElementById("ecsPicker");
+    const roomPicker = document.getElementById("roomPicker");
+    const roomSelect = document.getElementById("roomSelect");
     const ecsSelect = document.getElementById("ecsCodeSelect");
 
     if (!bValue || bValue === "Loading..." || bValue === "Empty") {
         return alert("Please select a valid building.");
     }
 
-    const match = database.find(d => d.building === bValue);
+    selectedBuildingData = database.find(d => d.building === bValue);
 
-    if (!match || !Array.isArray(match.ecs_list) || match.ecs_list.length === 0) {
-        ecsSelect.innerHTML = "";
-        ecsPicker.style.display = "none";
-        return alert("No ECS codes found for this building.");
+    if (
+        !selectedBuildingData ||
+        !Array.isArray(selectedBuildingData.ecs_list) ||
+        selectedBuildingData.ecs_list.length === 0
+    ) {
+        roomPicker.style.display = "none";
+        return alert("No room/ECS data found for this building.");
     }
 
-    ecsSelect.innerHTML = "";
+    const rooms = [...new Set(
+        selectedBuildingData.ecs_list
+            .map(item => item.room_id)
+            .filter(Boolean)
+    )].sort();
 
-    match.ecs_list
-        .sort((a, b) => {
-            const roomA = getRoomIdFromItem(a);
-            const roomB = getRoomIdFromItem(b);
-            const codeA = getEcsCodeFromItem(a);
-            const codeB = getEcsCodeFromItem(b);
+    roomSelect.innerHTML = `<option value="">Select room...</option>`;
+    ecsSelect.innerHTML = `<option value="">Select ECS...</option>`;
 
-            const roomCompare = String(roomA).localeCompare(String(roomB));
-            if (roomCompare !== 0) return roomCompare;
-
-            return String(codeA).localeCompare(String(codeB));
-        })
-        .forEach(item => {
-            const roomId = getRoomIdFromItem(item);
-            const ecsCode = getEcsCodeFromItem(item);
-            const commodity = normalizeCommodity(getCommodityFromItem(item));
-
-            const optionLabel = `${roomId} - ${ecsCode} - ${commodity}`;
-
-            const option = new Option(optionLabel, ecsCode);
-            option.dataset.roomId = roomId;
-            option.dataset.ecsCode = ecsCode;
-            option.dataset.commodity = commodity;
-
-            ecsSelect.add(option);
-        });
-
-    ecsPicker.style.display = "block";
-}
-
-function addSelectedEcsCodes() {
-    const bValue = document.getElementById("buildingSelect").value;
-    const ecsSelect = document.getElementById("ecsCodeSelect");
-    const selectedOptions = Array.from(ecsSelect.selectedOptions);
-
-    if (!bValue || bValue === "Loading..." || bValue === "Empty") {
-        return alert("Please select a valid building.");
-    }
-
-    if (selectedOptions.length === 0) {
-        return alert("Please select at least one ECS code.");
-    }
-
-    let addedCount = 0;
-    let duplicateCount = 0;
-
-    selectedOptions.forEach(option => {
-        const roomId = option.dataset.roomId || "";
-        const ecsCode = option.dataset.ecsCode || option.value;
-        const commodity = normalizeCommodity(option.dataset.commodity);
-
-        if (isDuplicateReportRow(bValue, roomId, ecsCode)) {
-            duplicateCount++;
-            return;
-        }
-
-        addReportRow(bValue, roomId, ecsCode, commodity);
-        addedCount++;
+    rooms.forEach(room => {
+        roomSelect.add(new Option(room, room));
     });
 
-    if (addedCount === 0 && duplicateCount > 0) {
-        alert("Selected ECS codes are already in your report.");
+    roomPicker.style.display = "block";
+}
+
+function loadEcsForRoom() {
+    const roomValue = document.getElementById("roomSelect").value;
+    const ecsSelect = document.getElementById("ecsCodeSelect");
+
+    ecsSelect.innerHTML = `<option value="">Select ECS...</option>`;
+
+    if (!selectedBuildingData || !roomValue) return;
+
+    const ecsItems = selectedBuildingData.ecs_list
+        .filter(item => item.room_id === roomValue)
+        .sort((a, b) => a.code.localeCompare(b.code));
+
+    ecsItems.forEach(item => {
+        const label = `${item.code} - ${item.commodity}`;
+        const option = new Option(label, item.code);
+
+        option.dataset.roomId = item.room_id;
+        option.dataset.ecsCode = item.code;
+        option.dataset.commodity = item.commodity;
+
+        ecsSelect.add(option);
+    });
+}
+
+function addSelectedEcsCode() {
+    const building = document.getElementById("buildingSelect").value;
+    const ecsSelect = document.getElementById("ecsCodeSelect");
+    const option = ecsSelect.selectedOptions[0];
+
+    if (!option || !option.value) {
+        return alert("Please select an ECS code.");
     }
 
-    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+    const roomId = option.dataset.roomId;
+    const ecsCode = option.dataset.ecsCode;
+    const commodity = option.dataset.commodity;
+
+    if (isDuplicateReportRow(building, roomId, ecsCode)) {
+        return alert("This item is already in your report.");
+    }
+
+    addReportRow(building, roomId, ecsCode, commodity);
 }
 
 function addReportRow(building, roomId, ecsCode, commodity) {
@@ -215,7 +203,7 @@ function addReportRow(building, roomId, ecsCode, commodity) {
     const statuses = GATE_STATUSES_BY_COMMODITY[cleanCommodity] || [];
 
     const statusOptions = statuses
-        .map(status => `<option>${escapeHtml(status)}</option>`)
+        .map(status => `<option value="${escapeHtml(status)}">${escapeHtml(status)}</option>`)
         .join("");
 
     row.innerHTML = `
@@ -247,7 +235,6 @@ function addOpportunisticEntry() {
     const commodity = prompt(
         "Enter Commodity:\nSUPPORT, EQUIP, PCON, CLAMPVALVE, CABLE, INLINE, DUCT, PIPE"
     );
-
     if (!commodity) return;
 
     const cleanBuilding = bName.trim().toUpperCase();
@@ -264,8 +251,6 @@ function addOpportunisticEntry() {
     }
 
     addReportRow(cleanBuilding, cleanRoomId, cleanEcs, cleanCommodity);
-
-    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
 }
 
 async function saveToCloud() {
@@ -311,22 +296,6 @@ function clearCurrentReport() {
     document.querySelector("#ecsTable tbody").innerHTML = "";
 }
 
-function selectAllVisibleEcsCodes() {
-    const ecsSelect = document.getElementById("ecsCodeSelect");
-
-    Array.from(ecsSelect.options).forEach(option => {
-        option.selected = true;
-    });
-}
-
-function clearSelectedEcsCodes() {
-    const ecsSelect = document.getElementById("ecsCodeSelect");
-
-    Array.from(ecsSelect.options).forEach(option => {
-        option.selected = false;
-    });
-}
-
 function isDuplicateReportRow(building, roomId, ecsCode) {
     const tbody = document.querySelector("#ecsTable tbody");
 
@@ -335,31 +304,6 @@ function isDuplicateReportRow(building, roomId, ecsCode) {
         row.cells[1].innerText.toUpperCase() === String(roomId).toUpperCase() &&
         row.cells[2].innerText.toUpperCase() === String(ecsCode).toUpperCase()
     );
-}
-
-function getRoomIdFromItem(item) {
-    if (typeof item === "string") return "";
-    return item.room_id || item.roomId || item.room || "";
-}
-
-function getEcsCodeFromItem(item) {
-    if (typeof item === "string") return item;
-    return item.code || item.ecs_code || item.ecsCode || item.ecs || "";
-}
-
-function getCommodityFromItem(item) {
-    if (typeof item === "string") return "PIPE";
-    return item.commodity || "PIPE";
-}
-
-function normalizeCommodity(value) {
-    const clean = String(value || "").trim().toUpperCase();
-
-    if (clean === "CLAMP VALVE") return "CLAMPVALVE";
-    if (clean === "CLAMP_VALVE") return "CLAMPVALVE";
-    if (clean === "CLAMP-VALVE") return "CLAMPVALVE";
-
-    return clean || "PIPE";
 }
 
 document.getElementById("csvFileInput").addEventListener("change", (e) => {
@@ -380,8 +324,7 @@ async function processCSV() {
 
     reader.onload = async (e) => {
         try {
-            const text = e.target.result;
-            const rows = parseCSV(text);
+            const rows = parseCSV(e.target.result);
 
             if (rows.length < 2) {
                 return alert("CSV file is empty.");
@@ -389,29 +332,10 @@ async function processCSV() {
 
             const headers = rows[0].map(h => h.trim().toUpperCase());
 
-            const buildingIndex = headers.findIndex(h =>
-                h === "BUILDING" ||
-                h === "BUILDING NAME"
-            );
-
-            const roomIndex = headers.findIndex(h =>
-                h === "ROOM ID" ||
-                h === "ROOM" ||
-                h === "ROOM_ID" ||
-                h === "ROOMID"
-            );
-
-            const ecsIndex = headers.findIndex(h =>
-                h === "ECS" ||
-                h === "ECS CODE" ||
-                h === "ECS_CODE" ||
-                h === "ECSCODE"
-            );
-
-            const commodityIndex = headers.findIndex(h =>
-                h === "COMMODITY" ||
-                h === "COMMODITY CODE"
-            );
+            const buildingIndex = findHeader(headers, ["BUILDING", "BUILDING NAME"]);
+            const roomIndex = findHeader(headers, ["ROOM ID", "ROOM", "ROOM_ID", "ROOMID"]);
+            const ecsIndex = findHeader(headers, ["ECS CODE", "ECS", "ECS_CODE", "ECSCODE"]);
+            const commodityIndex = findHeader(headers, ["COMMODITY", "COMMODITY CODE"]);
 
             if (
                 buildingIndex === -1 ||
@@ -427,28 +351,26 @@ async function processCSV() {
             for (let i = 1; i < rows.length; i++) {
                 const cols = rows[i];
 
-                const building = cols[buildingIndex]?.trim();
-                const roomId = cols[roomIndex]?.trim();
-                const ecsCode = cols[ecsIndex]?.trim();
+                const building = cleanCell(cols[buildingIndex]);
+                const roomId = cleanCell(cols[roomIndex]);
+                const ecsCode = cleanCell(cols[ecsIndex]);
                 const commodity = normalizeCommodity(cols[commodityIndex]);
 
                 if (!building || !roomId || !ecsCode || !commodity) continue;
 
                 if (!GATE_STATUSES_BY_COMMODITY[commodity]) {
-                    console.warn(`Skipping ${ecsCode}: invalid commodity ${commodity}`);
+                    console.warn(`Skipping row ${i + 1}: invalid commodity ${commodity}`);
                     continue;
                 }
 
-                if (!grouped[building]) {
-                    grouped[building] = [];
-                }
+                if (!grouped[building]) grouped[building] = [];
 
-                const alreadyExists = grouped[building].some(item =>
-                    String(item.room_id).toUpperCase() === String(roomId).toUpperCase() &&
-                    String(item.code).toUpperCase() === String(ecsCode).toUpperCase()
+                const duplicate = grouped[building].some(item =>
+                    item.room_id.toUpperCase() === roomId.toUpperCase() &&
+                    item.code.toUpperCase() === ecsCode.toUpperCase()
                 );
 
-                if (!alreadyExists) {
+                if (!duplicate) {
                     grouped[building].push({
                         room_id: roomId,
                         code: ecsCode,
@@ -477,17 +399,14 @@ async function processCSV() {
             await batch.commit();
 
             alert("Database updated.");
-            loadDataFromCloud();
+            await loadDataFromCloud();
 
             btn.style.display = "none";
-            btn.disabled = false;
-            btn.innerText = "UPLOAD CSV TO DATABASE";
-
             document.getElementById("csvFileInput").value = "";
         } catch (err) {
             alert("CSV Error: " + err.message);
             console.error(err);
-
+        } finally {
             btn.disabled = false;
             btn.innerText = "UPLOAD CSV TO DATABASE";
         }
@@ -522,9 +441,7 @@ function parseCSV(text) {
                 currentValue = "";
             }
 
-            if (char === "\r" && nextChar === "\n") {
-                i++;
-            }
+            if (char === "\r" && nextChar === "\n") i++;
         } else {
             currentValue += char;
         }
@@ -535,9 +452,7 @@ function parseCSV(text) {
         rows.push(currentRow);
     }
 
-    return rows.filter(row =>
-        row.some(cell => String(cell).trim() !== "")
-    );
+    return rows.filter(row => row.some(cell => String(cell).trim() !== ""));
 }
 
 async function exportAllReports() {
@@ -548,7 +463,7 @@ async function exportAllReports() {
             return alert("No reports available.");
         }
 
-        let csv = "Building,Room ID,ECS,Commodity,Status,User,Time\n";
+        let csv = "Building,Room ID,ECS Code,Commodity,Status,User,Time\n";
 
         snap.forEach(doc => {
             const r = doc.data();
@@ -556,7 +471,7 @@ async function exportAllReports() {
 
             if (r.data && Array.isArray(r.data)) {
                 r.data.forEach(i => {
-                    csv += `"${csvEscape(i.building)}","${csvEscape(i.room_id || "")}","${csvEscape(i.ecs_code)}","${csvEscape(i.commodity || "")}","${csvEscape(i.status)}","${csvEscape(r.user)}","${csvEscape(time)}"\n`;
+                    csv += `"${csvEscape(i.building)}","${csvEscape(i.room_id)}","${csvEscape(i.ecs_code)}","${csvEscape(i.commodity)}","${csvEscape(i.status)}","${csvEscape(r.user)}","${csvEscape(time)}"\n`;
                 });
             }
         });
@@ -577,48 +492,81 @@ async function exportAllReports() {
 async function clearAllReports() {
     if (!confirm("Delete all report history? This cannot be undone.")) return;
 
-    try {
-        const snap = await db.collection("reports").get();
+    const snap = await db.collection("reports").get();
 
-        if (snap.empty) {
-            return alert("No reports to delete.");
-        }
-
-        const batch = db.batch();
-        snap.forEach(d => batch.delete(d.ref));
-
-        await batch.commit();
-
-        alert("Report history cleared.");
-    } catch (e) {
-        alert("Error: " + e.message);
+    if (snap.empty) {
+        return alert("No reports to delete.");
     }
+
+    const batch = db.batch();
+    snap.forEach(d => batch.delete(d.ref));
+
+    await batch.commit();
+
+    alert("Report history cleared.");
 }
 
 async function wipeAllBuildings() {
     if (!confirm("Wipe master building list? This cannot be undone.")) return;
 
-    try {
-        const snap = await db.collection("buildings").get();
+    const snap = await db.collection("buildings").get();
 
-        if (snap.empty) {
-            return alert("No buildings to wipe.");
-        }
-
-        const batch = db.batch();
-        snap.forEach(d => batch.delete(d.ref));
-
-        await batch.commit();
-
-        alert("Master list wiped.");
-
-        database = [];
-        document.getElementById("buildingSelect").innerHTML = "<option>Empty</option>";
-        document.getElementById("ecsCodeSelect").innerHTML = "";
-        document.getElementById("ecsPicker").style.display = "none";
-    } catch (e) {
-        alert("Error: " + e.message);
+    if (snap.empty) {
+        return alert("No buildings to wipe.");
     }
+
+    const batch = db.batch();
+    snap.forEach(d => batch.delete(d.ref));
+
+    await batch.commit();
+
+    database = [];
+    selectedBuildingData = null;
+
+    document.getElementById("buildingSelect").innerHTML = "<option>Empty</option>";
+    document.getElementById("roomSelect").innerHTML = "<option>Select room...</option>";
+    document.getElementById("ecsCodeSelect").innerHTML = "<option>Select ECS...</option>";
+    document.getElementById("roomPicker").style.display = "none";
+
+    alert("Master list wiped.");
+}
+
+function normalizeEcsList(list) {
+    return list
+        .map(item => {
+            if (typeof item === "string") {
+                return {
+                    room_id: "",
+                    code: item,
+                    commodity: "PIPE"
+                };
+            }
+
+            return {
+                room_id: cleanCell(item.room_id || item.roomId || item.room || ""),
+                code: cleanCell(item.code || item.ecs_code || item.ecsCode || item.ecs || ""),
+                commodity: normalizeCommodity(item.commodity || "PIPE")
+            };
+        })
+        .filter(item => item.room_id && item.code && item.commodity);
+}
+
+function normalizeCommodity(value) {
+    const clean = String(value || "").trim().toUpperCase();
+
+    if (clean === "CLAMP VALVE") return "CLAMPVALVE";
+    if (clean === "CLAMP_VALVE") return "CLAMPVALVE";
+    if (clean === "CLAMP-VALVE") return "CLAMPVALVE";
+
+    return clean;
+}
+
+function findHeader(headers, possibleNames) {
+    return headers.findIndex(h => possibleNames.includes(h));
+}
+
+function cleanCell(value) {
+    return String(value ?? "").trim();
 }
 
 function csvEscape(value) {
