@@ -14,9 +14,6 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-let database = [];
-let selectedBuildingData = null;
-
 const GATE_STATUSES_BY_COMMODITY = {
     SUPPORT: ["1ENDS_CUT", "2PREP_TACK", "3WELDING"],
     EQUIP: ["1_INT_PREP", "2_1ST_INST", "3_2ND_INST", "4_ALIGN", "5_FINAL"],
@@ -38,10 +35,9 @@ auth.onAuthStateChanged((user) => {
     if (user) {
         loginOverlay.style.display = "none";
         mainApp.style.display = "block";
-
         adminSection.style.display = user.email === ADMIN_EMAIL ? "block" : "none";
 
-        loadDataFromCloud();
+        loadBuildingsFromCloud();
     } else {
         loginOverlay.style.display = "flex";
         mainApp.style.display = "none";
@@ -72,35 +68,48 @@ async function handleLogin() {
 }
 
 async function handleLogout() {
-    await auth.signOut();
+    try {
+        await auth.signOut();
+    } catch (e) {
+        alert("Logout error: " + e.message);
+    }
 }
 
-async function loadDataFromCloud() {
+/* -------------------------------------------------------
+   BUILDING LOAD
+------------------------------------------------------- */
+
+async function loadBuildingsFromCloud() {
     const status = document.getElementById("syncStatus");
+    const bSelect = document.getElementById("buildingSelect");
+    const oppBuildingSelect = document.getElementById("oppBuildingSelect");
 
     status.innerText = "Syncing...";
     status.style.background = "#fff3cd";
     status.style.color = "#664d03";
 
     try {
-        const snap = await db.collection("buildings").get();
+        const snap = await db.collection("buildings")
+            .orderBy("building")
+            .get();
 
-        database = snap.docs.map(doc => ({
-            building: doc.id,
-            ecs_list: normalizeEcsList(doc.data().ecs_list || [])
-        }));
-
-        const bSelect = document.getElementById("buildingSelect");
         bSelect.innerHTML = "";
+        oppBuildingSelect.innerHTML = "";
 
-        if (database.length === 0) {
-            bSelect.innerHTML = "<option>Empty</option>";
+        if (snap.empty) {
+            bSelect.innerHTML = `<option value="">Empty</option>`;
+            oppBuildingSelect.innerHTML = `<option value="">Empty</option>`;
         } else {
-            database
-                .sort((a, b) => a.building.localeCompare(b.building))
-                .forEach(item => {
-                    bSelect.add(new Option(item.building, item.building));
-                });
+            bSelect.innerHTML = `<option value="">Select building...</option>`;
+            oppBuildingSelect.innerHTML = `<option value="">Select building...</option>`;
+
+            snap.forEach(doc => {
+                const data = doc.data();
+                const building = data.building || doc.id;
+
+                bSelect.add(new Option(building, building));
+                oppBuildingSelect.add(new Option(building, building));
+            });
         }
 
         status.innerText = "Cloud Active";
@@ -114,71 +123,91 @@ async function loadDataFromCloud() {
     }
 }
 
-function loadRoomsForBuilding() {
-    const bValue = document.getElementById("buildingSelect").value;
+/* -------------------------------------------------------
+   NORMAL BUILDING → ROOM → ECS FLOW
+------------------------------------------------------- */
+
+async function loadRoomsForBuilding() {
+    const building = document.getElementById("buildingSelect").value;
     const roomPicker = document.getElementById("roomPicker");
     const roomSelect = document.getElementById("roomSelect");
     const ecsSelect = document.getElementById("ecsCodeSelect");
 
-    if (!bValue || bValue === "Loading..." || bValue === "Empty") {
-        return alert("Please select a valid building.");
+    if (!building) {
+        return alert("Please select a building.");
     }
 
-    selectedBuildingData = database.find(d => d.building === bValue);
-
-    if (
-        !selectedBuildingData ||
-        !Array.isArray(selectedBuildingData.ecs_list) ||
-        selectedBuildingData.ecs_list.length === 0
-    ) {
-        roomPicker.style.display = "none";
-        return alert("No room/ECS data found for this building.");
-    }
-
-    const rooms = [...new Set(
-        selectedBuildingData.ecs_list
-            .map(item => item.room_id)
-            .filter(Boolean)
-    )].sort();
-
-    roomSelect.innerHTML = `<option value="">Select room...</option>`;
+    roomSelect.innerHTML = `<option value="">Loading rooms...</option>`;
     ecsSelect.innerHTML = `<option value="">Select ECS...</option>`;
 
-    rooms.forEach(room => {
-        roomSelect.add(new Option(room, room));
-    });
+    try {
+        const rooms = await getRoomsForBuilding(building);
 
-    roomPicker.style.display = "block";
+        roomSelect.innerHTML = `<option value="">Select room...</option>`;
+
+        rooms.forEach(roomId => {
+            roomSelect.add(new Option(roomId, roomId));
+        });
+
+        if (rooms.length === 0) {
+            roomPicker.style.display = "none";
+            return alert("No rooms found for this building.");
+        }
+
+        roomPicker.style.display = "block";
+    } catch (e) {
+        alert("Room load error: " + e.message);
+        console.error(e);
+        roomSelect.innerHTML = `<option value="">Error loading rooms</option>`;
+    }
 }
 
-function loadEcsForRoom() {
-    const roomValue = document.getElementById("roomSelect").value;
+async function loadEcsForRoom() {
+    const building = document.getElementById("buildingSelect").value;
+    const roomId = document.getElementById("roomSelect").value;
     const ecsSelect = document.getElementById("ecsCodeSelect");
 
-    ecsSelect.innerHTML = `<option value="">Select ECS...</option>`;
+    ecsSelect.innerHTML = `<option value="">Loading ECS...</option>`;
 
-    if (!selectedBuildingData || !roomValue) return;
+    if (!building || !roomId) {
+        ecsSelect.innerHTML = `<option value="">Select ECS...</option>`;
+        return;
+    }
 
-    const ecsItems = selectedBuildingData.ecs_list
-        .filter(item => item.room_id === roomValue)
-        .sort((a, b) => a.code.localeCompare(b.code));
+    try {
+        const ecsItems = await getEcsForBuildingRoom(building, roomId);
 
-    ecsItems.forEach(item => {
-        const label = `${item.code} - ${item.commodity}`;
-        const option = new Option(label, item.code);
+        ecsSelect.innerHTML = `<option value="">Select ECS...</option>`;
 
-        option.dataset.roomId = item.room_id;
-        option.dataset.ecsCode = item.code;
-        option.dataset.commodity = item.commodity;
+        ecsItems.forEach(item => {
+            const label = `${item.ecs_code} - ${item.commodity}`;
+            const option = new Option(label, item.id);
 
-        ecsSelect.add(option);
-    });
+            option.dataset.roomId = item.room_id;
+            option.dataset.ecsCode = item.ecs_code;
+            option.dataset.commodity = item.commodity;
+
+            ecsSelect.add(option);
+        });
+
+        if (ecsItems.length === 0) {
+            ecsSelect.innerHTML = `<option value="">No ECS found</option>`;
+        }
+    } catch (e) {
+        alert("ECS load error: " + e.message);
+        console.error(e);
+        ecsSelect.innerHTML = `<option value="">Error loading ECS</option>`;
+    }
 }
 
 function addSelectedEcsCode() {
     const building = document.getElementById("buildingSelect").value;
     const ecsSelect = document.getElementById("ecsCodeSelect");
     const option = ecsSelect.selectedOptions[0];
+
+    if (!building) {
+        return alert("Please select a building.");
+    }
 
     if (!option || !option.value) {
         return alert("Please select an ECS code.");
@@ -194,6 +223,167 @@ function addSelectedEcsCode() {
 
     addReportRow(building, roomId, ecsCode, commodity);
 }
+
+/* -------------------------------------------------------
+   OPPORTUNISTIC BUILDING → ROOM → ECS FLOW
+------------------------------------------------------- */
+
+function toggleOpportunisticPicker() {
+    const picker = document.getElementById("opportunisticPicker");
+    picker.style.display = picker.style.display === "block" ? "none" : "block";
+}
+
+async function loadOpportunisticRooms() {
+    const building = document.getElementById("oppBuildingSelect").value;
+    const roomSelect = document.getElementById("oppRoomSelect");
+    const ecsSelect = document.getElementById("oppEcsSelect");
+
+    roomSelect.innerHTML = `<option value="">Loading rooms...</option>`;
+    ecsSelect.innerHTML = `<option value="">Select ECS...</option>`;
+
+    if (!building) {
+        roomSelect.innerHTML = `<option value="">Select room...</option>`;
+        return;
+    }
+
+    try {
+        const rooms = await getRoomsForBuilding(building);
+
+        roomSelect.innerHTML = `<option value="">Select room...</option>`;
+
+        rooms.forEach(roomId => {
+            roomSelect.add(new Option(roomId, roomId));
+        });
+
+        if (rooms.length === 0) {
+            roomSelect.innerHTML = `<option value="">No rooms found</option>`;
+        }
+    } catch (e) {
+        alert("Room load error: " + e.message);
+        console.error(e);
+        roomSelect.innerHTML = `<option value="">Error loading rooms</option>`;
+    }
+}
+
+async function loadOpportunisticEcs() {
+    const building = document.getElementById("oppBuildingSelect").value;
+    const roomId = document.getElementById("oppRoomSelect").value;
+    const ecsSelect = document.getElementById("oppEcsSelect");
+
+    ecsSelect.innerHTML = `<option value="">Loading ECS...</option>`;
+
+    if (!building || !roomId) {
+        ecsSelect.innerHTML = `<option value="">Select ECS...</option>`;
+        return;
+    }
+
+    try {
+        const ecsItems = await getEcsForBuildingRoom(building, roomId);
+
+        ecsSelect.innerHTML = `<option value="">Select ECS...</option>`;
+
+        ecsItems.forEach(item => {
+            const label = `${item.ecs_code} - ${item.commodity}`;
+            const option = new Option(label, item.id);
+
+            option.dataset.building = item.building;
+            option.dataset.roomId = item.room_id;
+            option.dataset.ecsCode = item.ecs_code;
+            option.dataset.commodity = item.commodity;
+
+            ecsSelect.add(option);
+        });
+
+        if (ecsItems.length === 0) {
+            ecsSelect.innerHTML = `<option value="">No ECS found</option>`;
+        }
+    } catch (e) {
+        alert("ECS load error: " + e.message);
+        console.error(e);
+        ecsSelect.innerHTML = `<option value="">Error loading ECS</option>`;
+    }
+}
+
+function addSelectedOpportunisticEntry() {
+    const building = document.getElementById("oppBuildingSelect").value;
+    const roomId = document.getElementById("oppRoomSelect").value;
+    const ecsSelect = document.getElementById("oppEcsSelect");
+    const option = ecsSelect.selectedOptions[0];
+
+    if (!building) {
+        return alert("Please select a building.");
+    }
+
+    if (!roomId) {
+        return alert("Please select a room.");
+    }
+
+    if (!option || !option.value) {
+        return alert("Please select an ECS code.");
+    }
+
+    const ecsCode = option.dataset.ecsCode;
+    const commodity = option.dataset.commodity;
+
+    if (isDuplicateReportRow(building, roomId, ecsCode)) {
+        return alert("This item is already in your report.");
+    }
+
+    addReportRow(building, roomId, ecsCode, commodity);
+
+    window.scrollTo({
+        top: document.body.scrollHeight,
+        behavior: "smooth"
+    });
+}
+
+/* -------------------------------------------------------
+   FIRESTORE QUERY HELPERS
+------------------------------------------------------- */
+
+async function getRoomsForBuilding(building) {
+    const snap = await db.collection("ecs_master")
+        .where("building", "==", building)
+        .orderBy("room_id")
+        .get();
+
+    const rooms = new Set();
+
+    snap.forEach(doc => {
+        const data = doc.data();
+        if (data.room_id) rooms.add(data.room_id);
+    });
+
+    return [...rooms].sort();
+}
+
+async function getEcsForBuildingRoom(building, roomId) {
+    const snap = await db.collection("ecs_master")
+        .where("building", "==", building)
+        .where("room_id", "==", roomId)
+        .orderBy("ecs_code")
+        .get();
+
+    const items = [];
+
+    snap.forEach(doc => {
+        const data = doc.data();
+
+        items.push({
+            id: doc.id,
+            building: data.building,
+            room_id: data.room_id,
+            ecs_code: data.ecs_code,
+            commodity: data.commodity
+        });
+    });
+
+    return items;
+}
+
+/* -------------------------------------------------------
+   REPORT TABLE
+------------------------------------------------------- */
 
 function addReportRow(building, roomId, ecsCode, commodity) {
     const tbody = document.querySelector("#ecsTable tbody");
@@ -222,35 +412,19 @@ function addReportRow(building, roomId, ecsCode, commodity) {
     `;
 }
 
-function addOpportunisticEntry() {
-    const bName = prompt("Enter Building Name:");
-    if (!bName) return;
+function isDuplicateReportRow(building, roomId, ecsCode) {
+    const tbody = document.querySelector("#ecsTable tbody");
 
-    const roomId = prompt("Enter Room ID:");
-    if (!roomId) return;
-
-    const ecsCode = prompt("Enter ECS Code:");
-    if (!ecsCode) return;
-
-    const commodity = prompt(
-        "Enter Commodity:\nSUPPORT, EQUIP, PCON, CLAMPVALVE, CABLE, INLINE, DUCT, PIPE"
+    return Array.from(tbody.rows).some(row =>
+        row.cells[0].innerText.toUpperCase() === String(building).toUpperCase() &&
+        row.cells[1].innerText.toUpperCase() === String(roomId).toUpperCase() &&
+        row.cells[2].innerText.toUpperCase() === String(ecsCode).toUpperCase()
     );
-    if (!commodity) return;
+}
 
-    const cleanBuilding = bName.trim().toUpperCase();
-    const cleanRoomId = roomId.trim().toUpperCase();
-    const cleanEcs = ecsCode.trim().toUpperCase();
-    const cleanCommodity = normalizeCommodity(commodity);
-
-    if (!GATE_STATUSES_BY_COMMODITY[cleanCommodity]) {
-        return alert("Invalid commodity entered.");
-    }
-
-    if (isDuplicateReportRow(cleanBuilding, cleanRoomId, cleanEcs)) {
-        return alert("This item is already in your report.");
-    }
-
-    addReportRow(cleanBuilding, cleanRoomId, cleanEcs, cleanCommodity);
+function clearCurrentReport() {
+    if (!confirm("Clear the current report table?")) return;
+    document.querySelector("#ecsTable tbody").innerHTML = "";
 }
 
 async function saveToCloud() {
@@ -291,20 +465,9 @@ async function saveToCloud() {
     }
 }
 
-function clearCurrentReport() {
-    if (!confirm("Clear the current report table?")) return;
-    document.querySelector("#ecsTable tbody").innerHTML = "";
-}
-
-function isDuplicateReportRow(building, roomId, ecsCode) {
-    const tbody = document.querySelector("#ecsTable tbody");
-
-    return Array.from(tbody.rows).some(row =>
-        row.cells[0].innerText.toUpperCase() === String(building).toUpperCase() &&
-        row.cells[1].innerText.toUpperCase() === String(roomId).toUpperCase() &&
-        row.cells[2].innerText.toUpperCase() === String(ecsCode).toUpperCase()
-    );
-}
+/* -------------------------------------------------------
+   CSV UPLOAD
+------------------------------------------------------- */
 
 document.getElementById("csvFileInput").addEventListener("change", (e) => {
     if (e.target.files.length > 0) {
@@ -346,7 +509,11 @@ async function processCSV() {
                 return alert("CSV must contain Building, Room ID, ECS Code, and Commodity columns.");
             }
 
-            const grouped = {};
+            btn.disabled = true;
+            btn.innerText = "UPLOADING...";
+
+            const buildingSet = new Set();
+            const ecsRows = [];
 
             for (let i = 1; i < rows.length; i++) {
                 const cols = rows[i];
@@ -363,46 +530,28 @@ async function processCSV() {
                     continue;
                 }
 
-                if (!grouped[building]) grouped[building] = [];
+                buildingSet.add(building);
 
-                const duplicate = grouped[building].some(item =>
-                    item.room_id.toUpperCase() === roomId.toUpperCase() &&
-                    item.code.toUpperCase() === ecsCode.toUpperCase()
-                );
-
-                if (!duplicate) {
-                    grouped[building].push({
-                        room_id: roomId,
-                        code: ecsCode,
-                        commodity: commodity
-                    });
-                }
+                ecsRows.push({
+                    building,
+                    room_id: roomId,
+                    ecs_code: ecsCode,
+                    commodity
+                });
             }
 
-            const buildingNames = Object.keys(grouped);
-
-            if (buildingNames.length === 0) {
+            if (ecsRows.length === 0) {
                 return alert("No valid rows found in CSV.");
             }
 
-            btn.disabled = true;
-            btn.innerText = "UPLOADING...";
+            await uploadLargeCsvToFirestore([...buildingSet], ecsRows);
 
-            const batch = db.batch();
+            alert(`Upload complete. ${ecsRows.length} ECS entries saved.`);
 
-            buildingNames.forEach(building => {
-                batch.set(db.collection("buildings").doc(building), {
-                    ecs_list: grouped[building]
-                });
-            });
-
-            await batch.commit();
-
-            alert("Database updated.");
-            await loadDataFromCloud();
-
-            btn.style.display = "none";
             document.getElementById("csvFileInput").value = "";
+            btn.style.display = "none";
+
+            await loadBuildingsFromCloud();
         } catch (err) {
             alert("CSV Error: " + err.message);
             console.error(err);
@@ -414,6 +563,162 @@ async function processCSV() {
 
     reader.readAsText(file);
 }
+
+async function uploadLargeCsvToFirestore(buildings, ecsRows) {
+    const MAX_BATCH_SIZE = 450;
+    let batch = db.batch();
+    let operationCount = 0;
+
+    for (const building of buildings) {
+        const buildingRef = db.collection("buildings").doc(safeDocId(building));
+
+        batch.set(buildingRef, {
+            building,
+            updated_at: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        operationCount++;
+
+        if (operationCount >= MAX_BATCH_SIZE) {
+            await batch.commit();
+            batch = db.batch();
+            operationCount = 0;
+        }
+    }
+
+    const seenDocIds = new Set();
+
+    for (const item of ecsRows) {
+        const docId = safeDocId(`${item.building}_${item.room_id}_${item.ecs_code}`);
+
+        if (seenDocIds.has(docId)) continue;
+        seenDocIds.add(docId);
+
+        const ecsRef = db.collection("ecs_master").doc(docId);
+
+        batch.set(ecsRef, {
+            building: item.building,
+            room_id: item.room_id,
+            ecs_code: item.ecs_code,
+            commodity: item.commodity,
+            search_key: `${item.building}|${item.room_id}|${item.ecs_code}`,
+            updated_at: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        operationCount++;
+
+        if (operationCount >= MAX_BATCH_SIZE) {
+            await batch.commit();
+            batch = db.batch();
+            operationCount = 0;
+        }
+    }
+
+    if (operationCount > 0) {
+        await batch.commit();
+    }
+}
+
+/* -------------------------------------------------------
+   EXPORT / DELETE
+------------------------------------------------------- */
+
+async function exportAllReports() {
+    try {
+        const snap = await db.collection("reports").get();
+
+        if (snap.empty) {
+            return alert("No reports available.");
+        }
+
+        let csv = "Building,Room ID,ECS Code,Commodity,Status,User,Time\n";
+
+        snap.forEach(doc => {
+            const r = doc.data();
+            const time = r.timestamp ? r.timestamp.toDate().toLocaleString() : "N/A";
+
+            if (r.data && Array.isArray(r.data)) {
+                r.data.forEach(i => {
+                    csv += `"${csvEscape(i.building)}","${csvEscape(i.room_id)}","${csvEscape(i.ecs_code)}","${csvEscape(i.commodity)}","${csvEscape(i.status)}","${csvEscape(r.user)}","${csvEscape(time)}"\n`;
+                });
+            }
+        });
+
+        const blob = new Blob([csv], { type: "text/csv" });
+        const link = document.createElement("a");
+
+        link.href = URL.createObjectURL(blob);
+        link.download = `Export_${new Date().toISOString().split("T")[0]}.csv`;
+        link.click();
+
+        URL.revokeObjectURL(link.href);
+    } catch (e) {
+        alert("Export error: " + e.message);
+        console.error(e);
+    }
+}
+
+async function clearAllReports() {
+    if (!confirm("Delete all report history? This cannot be undone.")) return;
+
+    try {
+        await deleteCollectionInBatches("reports");
+        alert("Report history cleared.");
+    } catch (e) {
+        alert("Clear reports error: " + e.message);
+        console.error(e);
+    }
+}
+
+async function wipeMasterList() {
+    if (!confirm("Wipe master building, room, and ECS list? This cannot be undone.")) return;
+
+    try {
+        await deleteCollectionInBatches("ecs_master");
+        await deleteCollectionInBatches("buildings");
+
+        document.getElementById("buildingSelect").innerHTML = `<option value="">Empty</option>`;
+        document.getElementById("oppBuildingSelect").innerHTML = `<option value="">Empty</option>`;
+
+        document.getElementById("roomSelect").innerHTML = `<option value="">Select room...</option>`;
+        document.getElementById("ecsCodeSelect").innerHTML = `<option value="">Select ECS...</option>`;
+
+        document.getElementById("oppRoomSelect").innerHTML = `<option value="">Select room...</option>`;
+        document.getElementById("oppEcsSelect").innerHTML = `<option value="">Select ECS...</option>`;
+
+        document.getElementById("roomPicker").style.display = "none";
+        document.getElementById("opportunisticPicker").style.display = "none";
+
+        alert("Master list wiped.");
+    } catch (e) {
+        alert("Wipe error: " + e.message);
+        console.error(e);
+    }
+}
+
+async function deleteCollectionInBatches(collectionName) {
+    const MAX_BATCH_SIZE = 450;
+
+    while (true) {
+        const snap = await db.collection(collectionName)
+            .limit(MAX_BATCH_SIZE)
+            .get();
+
+        if (snap.empty) break;
+
+        const batch = db.batch();
+
+        snap.docs.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+
+        await batch.commit();
+    }
+}
+
+/* -------------------------------------------------------
+   HELPERS
+------------------------------------------------------- */
 
 function parseCSV(text) {
     const rows = [];
@@ -455,100 +760,12 @@ function parseCSV(text) {
     return rows.filter(row => row.some(cell => String(cell).trim() !== ""));
 }
 
-async function exportAllReports() {
-    try {
-        const snap = await db.collection("reports").get();
-
-        if (snap.empty) {
-            return alert("No reports available.");
-        }
-
-        let csv = "Building,Room ID,ECS Code,Commodity,Status,User,Time\n";
-
-        snap.forEach(doc => {
-            const r = doc.data();
-            const time = r.timestamp ? r.timestamp.toDate().toLocaleString() : "N/A";
-
-            if (r.data && Array.isArray(r.data)) {
-                r.data.forEach(i => {
-                    csv += `"${csvEscape(i.building)}","${csvEscape(i.room_id)}","${csvEscape(i.ecs_code)}","${csvEscape(i.commodity)}","${csvEscape(i.status)}","${csvEscape(r.user)}","${csvEscape(time)}"\n`;
-                });
-            }
-        });
-
-        const blob = new Blob([csv], { type: "text/csv" });
-        const link = document.createElement("a");
-
-        link.href = URL.createObjectURL(blob);
-        link.download = `Export_${new Date().toISOString().split("T")[0]}.csv`;
-        link.click();
-
-        URL.revokeObjectURL(link.href);
-    } catch (e) {
-        alert("Export error: " + e.message);
-    }
+function findHeader(headers, possibleNames) {
+    return headers.findIndex(h => possibleNames.includes(h));
 }
 
-async function clearAllReports() {
-    if (!confirm("Delete all report history? This cannot be undone.")) return;
-
-    const snap = await db.collection("reports").get();
-
-    if (snap.empty) {
-        return alert("No reports to delete.");
-    }
-
-    const batch = db.batch();
-    snap.forEach(d => batch.delete(d.ref));
-
-    await batch.commit();
-
-    alert("Report history cleared.");
-}
-
-async function wipeAllBuildings() {
-    if (!confirm("Wipe master building list? This cannot be undone.")) return;
-
-    const snap = await db.collection("buildings").get();
-
-    if (snap.empty) {
-        return alert("No buildings to wipe.");
-    }
-
-    const batch = db.batch();
-    snap.forEach(d => batch.delete(d.ref));
-
-    await batch.commit();
-
-    database = [];
-    selectedBuildingData = null;
-
-    document.getElementById("buildingSelect").innerHTML = "<option>Empty</option>";
-    document.getElementById("roomSelect").innerHTML = "<option>Select room...</option>";
-    document.getElementById("ecsCodeSelect").innerHTML = "<option>Select ECS...</option>";
-    document.getElementById("roomPicker").style.display = "none";
-
-    alert("Master list wiped.");
-}
-
-function normalizeEcsList(list) {
-    return list
-        .map(item => {
-            if (typeof item === "string") {
-                return {
-                    room_id: "",
-                    code: item,
-                    commodity: "PIPE"
-                };
-            }
-
-            return {
-                room_id: cleanCell(item.room_id || item.roomId || item.room || ""),
-                code: cleanCell(item.code || item.ecs_code || item.ecsCode || item.ecs || ""),
-                commodity: normalizeCommodity(item.commodity || "PIPE")
-            };
-        })
-        .filter(item => item.room_id && item.code && item.commodity);
+function cleanCell(value) {
+    return String(value ?? "").trim();
 }
 
 function normalizeCommodity(value) {
@@ -561,12 +778,10 @@ function normalizeCommodity(value) {
     return clean;
 }
 
-function findHeader(headers, possibleNames) {
-    return headers.findIndex(h => possibleNames.includes(h));
-}
-
-function cleanCell(value) {
-    return String(value ?? "").trim();
+function safeDocId(value) {
+    return String(value)
+        .trim()
+        .replace(/[\/\\#?\[\]]/g, "_");
 }
 
 function csvEscape(value) {
