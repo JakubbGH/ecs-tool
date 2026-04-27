@@ -413,7 +413,13 @@
 
                 <hr>
 
-                <div class="manual-box">
+                <div class="actions">
+                    <button class="secondary-btn" onclick="toggleManualOpportunisticEntry()">
+                        CAN'T FIND MY ECS CODE
+                    </button>
+                </div>
+
+                <div id="manualOpportunisticBox" class="manual-box" style="display:none; margin-top:14px;">
                     <h3>Manual Opportunistic Entry</h3>
 
                     <p class="muted">
@@ -465,6 +471,12 @@
                                 CLEAR MANUAL ENTRY
                             </button>
                         </div>
+                    </div>
+
+                    <div class="actions">
+                        <button class="secondary-btn" onclick="hideManualOpportunisticEntry()">
+                            HIDE MANUAL ENTRY
+                        </button>
                     </div>
                 </div>
             </div>
@@ -560,7 +572,7 @@
 
     </main>
 
-    <script src="app.js?v=10"></script>
+    <script src="app.js?v=11"></script>
 
 </body>
 </html>
