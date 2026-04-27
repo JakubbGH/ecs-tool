@@ -8,10 +8,14 @@ const firebaseConfig = {
 };
 
 const ADMIN_EMAIL = "admin@ecs-tool.com";
+
 firebase.initializeApp(firebaseConfig);
 
 const auth = firebase.auth();
 const db = firebase.firestore();
+
+const MAIN_COLLECTION = "ecs_master";
+const OPPORTUNISTIC_COLLECTION = "opportunistic_master";
 
 const GATE_STATUSES_BY_COMMODITY = {
     SUPPORT: ["1ENDS_CUT", "2PREP_TACK", "3WELDING"],
@@ -88,25 +92,29 @@ async function loadBuildingsFromCloud() {
     status.style.color = "#664d03";
 
     try {
-        const snap = await db.collection("buildings")
-            .orderBy("building")
-            .get();
+        const mainBuildings = await getBuildingsFromCollection(MAIN_COLLECTION);
+        const opportunisticBuildings = await getBuildingsFromCollection(OPPORTUNISTIC_COLLECTION);
+
+        const mainOnlyBuildings = [...new Set(mainBuildings)].sort();
+        const allBuildings = [...new Set([...mainBuildings, ...opportunisticBuildings])].sort();
 
         bSelect.innerHTML = "";
         oppBuildingSelect.innerHTML = "";
 
-        if (snap.empty) {
+        if (mainOnlyBuildings.length === 0) {
             bSelect.innerHTML = `<option value="">Empty</option>`;
-            oppBuildingSelect.innerHTML = `<option value="">Empty</option>`;
         } else {
             bSelect.innerHTML = `<option value="">Select building...</option>`;
-            oppBuildingSelect.innerHTML = `<option value="">Select building...</option>`;
-
-            snap.forEach(doc => {
-                const data = doc.data();
-                const building = data.building || doc.id;
-
+            mainOnlyBuildings.forEach(building => {
                 bSelect.add(new Option(building, building));
+            });
+        }
+
+        if (allBuildings.length === 0) {
+            oppBuildingSelect.innerHTML = `<option value="">Empty</option>`;
+        } else {
+            oppBuildingSelect.innerHTML = `<option value="">Select building...</option>`;
+            allBuildings.forEach(building => {
                 oppBuildingSelect.add(new Option(building, building));
             });
         }
@@ -122,8 +130,27 @@ async function loadBuildingsFromCloud() {
     }
 }
 
+async function getBuildingsFromCollection(collectionName) {
+    const buildings = new Set();
+
+    try {
+        const snap = await db.collection(collectionName)
+            .orderBy("building")
+            .get();
+
+        snap.forEach(doc => {
+            const data = doc.data();
+            if (data.building) buildings.add(data.building);
+        });
+    } catch (e) {
+        console.warn(`Could not load buildings from ${collectionName}`, e);
+    }
+
+    return [...buildings];
+}
+
 /* -------------------------------------------------------
-   NORMAL BUILDING → ROOM → ECS FLOW
+   NORMAL MAIN ECS FLOW
 ------------------------------------------------------- */
 
 async function loadRoomsForBuilding() {
@@ -140,7 +167,7 @@ async function loadRoomsForBuilding() {
     ecsSelect.innerHTML = `<option value="">Select ECS...</option>`;
 
     try {
-        const rooms = await getRoomsForBuilding(building);
+        const rooms = await getRoomsForBuilding(MAIN_COLLECTION, building);
 
         roomSelect.innerHTML = `<option value="">Select room...</option>`;
 
@@ -150,7 +177,7 @@ async function loadRoomsForBuilding() {
 
         if (rooms.length === 0) {
             roomPicker.style.display = "none";
-            return alert("No rooms found for this building.");
+            return alert("No main ECS rooms found for this building.");
         }
 
         roomPicker.style.display = "block";
@@ -174,7 +201,7 @@ async function loadEcsForRoom() {
     }
 
     try {
-        const ecsItems = await getEcsForBuildingRoom(building, roomId);
+        const ecsItems = await getEcsForBuildingRoom(MAIN_COLLECTION, building, roomId);
 
         ecsSelect.innerHTML = `<option value="">Select ECS...</option>`;
 
@@ -204,13 +231,8 @@ function addSelectedEcsCode() {
     const ecsSelect = document.getElementById("ecsCodeSelect");
     const option = ecsSelect.selectedOptions[0];
 
-    if (!building) {
-        return alert("Please select a building.");
-    }
-
-    if (!option || !option.value) {
-        return alert("Please select an ECS code.");
-    }
+    if (!building) return alert("Please select a building.");
+    if (!option || !option.value) return alert("Please select an ECS code.");
 
     const roomId = option.dataset.roomId;
     const ecsCode = option.dataset.ecsCode;
@@ -224,7 +246,7 @@ function addSelectedEcsCode() {
 }
 
 /* -------------------------------------------------------
-   OPPORTUNISTIC BUILDING → ROOM → ECS FLOW
+   OPPORTUNISTIC DROPDOWN FLOW
 ------------------------------------------------------- */
 
 function toggleOpportunisticPicker() {
@@ -246,7 +268,7 @@ async function loadOpportunisticRooms() {
     }
 
     try {
-        const rooms = await getRoomsForBuilding(building);
+        const rooms = await getRoomsForBuilding(OPPORTUNISTIC_COLLECTION, building);
 
         roomSelect.innerHTML = `<option value="">Select room...</option>`;
 
@@ -255,10 +277,10 @@ async function loadOpportunisticRooms() {
         });
 
         if (rooms.length === 0) {
-            roomSelect.innerHTML = `<option value="">No rooms found</option>`;
+            roomSelect.innerHTML = `<option value="">No opportunistic rooms found</option>`;
         }
     } catch (e) {
-        alert("Room load error: " + e.message);
+        alert("Opportunistic room load error: " + e.message);
         console.error(e);
         roomSelect.innerHTML = `<option value="">Error loading rooms</option>`;
     }
@@ -277,7 +299,7 @@ async function loadOpportunisticEcs() {
     }
 
     try {
-        const ecsItems = await getEcsForBuildingRoom(building, roomId);
+        const ecsItems = await getEcsForBuildingRoom(OPPORTUNISTIC_COLLECTION, building, roomId);
 
         ecsSelect.innerHTML = `<option value="">Select ECS...</option>`;
 
@@ -297,7 +319,7 @@ async function loadOpportunisticEcs() {
             ecsSelect.innerHTML = `<option value="">No ECS found</option>`;
         }
     } catch (e) {
-        alert("ECS load error: " + e.message);
+        alert("Opportunistic ECS load error: " + e.message);
         console.error(e);
         ecsSelect.innerHTML = `<option value="">Error loading ECS</option>`;
     }
@@ -309,17 +331,9 @@ function addSelectedOpportunisticEntry() {
     const ecsSelect = document.getElementById("oppEcsSelect");
     const option = ecsSelect.selectedOptions[0];
 
-    if (!building) {
-        return alert("Please select a building.");
-    }
-
-    if (!roomId) {
-        return alert("Please select a room.");
-    }
-
-    if (!option || !option.value) {
-        return alert("Please select an ECS code.");
-    }
+    if (!building) return alert("Please select a building.");
+    if (!roomId) return alert("Please select a room.");
+    if (!option || !option.value) return alert("Please select an ECS code.");
 
     const ecsCode = option.dataset.ecsCode;
     const commodity = option.dataset.commodity;
@@ -337,11 +351,67 @@ function addSelectedOpportunisticEntry() {
 }
 
 /* -------------------------------------------------------
+   MANUAL OPPORTUNISTIC FALLBACK
+------------------------------------------------------- */
+
+function addManualOpportunisticEntry() {
+    const buildingInput = document.getElementById("manualOppBuilding");
+    const roomInput = document.getElementById("manualOppRoom");
+    const ecsInput = document.getElementById("manualOppEcs");
+    const commodityInput = document.getElementById("manualOppCommodity");
+
+    const building = cleanCell(buildingInput.value).toUpperCase();
+    const roomId = cleanCell(roomInput.value).toUpperCase();
+    const ecsCode = cleanCell(ecsInput.value).toUpperCase();
+    const commodity = normalizeCommodity(commodityInput.value);
+
+    if (!building) {
+        return alert("Please enter a building.");
+    }
+
+    if (!roomId) {
+        return alert("Please enter a room ID.");
+    }
+
+    if (!ecsCode) {
+        return alert("Please enter an ECS code.");
+    }
+
+    if (!commodity) {
+        return alert("Please select a commodity.");
+    }
+
+    if (!GATE_STATUSES_BY_COMMODITY[commodity]) {
+        return alert("Invalid commodity selected.");
+    }
+
+    if (isDuplicateReportRow(building, roomId, ecsCode)) {
+        return alert("This item is already in your report.");
+    }
+
+    addReportRow(building, roomId, ecsCode, commodity);
+
+    clearManualOpportunisticEntry();
+
+    window.scrollTo({
+        top: document.body.scrollHeight,
+        behavior: "smooth"
+    });
+}
+
+function clearManualOpportunisticEntry() {
+    document.getElementById("manualOppBuilding").value = "";
+    document.getElementById("manualOppRoom").value = "";
+    document.getElementById("manualOppEcs").value = "";
+    document.getElementById("manualOppCommodity").value = "";
+}
+
+/* -------------------------------------------------------
    FIRESTORE QUERY HELPERS
 ------------------------------------------------------- */
 
-async function getRoomsForBuilding(building) {
-    const snap = await db.collection("ecs_master")
+async function getRoomsForBuilding(collectionName, building) {
+    const snap = await db.collection(collectionName)
         .where("building", "==", building)
         .orderBy("room_id")
         .get();
@@ -356,8 +426,8 @@ async function getRoomsForBuilding(building) {
     return [...rooms].sort();
 }
 
-async function getEcsForBuildingRoom(building, roomId) {
-    const snap = await db.collection("ecs_master")
+async function getEcsForBuildingRoom(collectionName, building, roomId) {
+    const snap = await db.collection(collectionName)
         .where("building", "==", building)
         .where("room_id", "==", roomId)
         .orderBy("ecs_code")
@@ -465,18 +535,43 @@ async function saveToCloud() {
 }
 
 /* -------------------------------------------------------
-   CSV UPLOAD
+   CSV UPLOADS
 ------------------------------------------------------- */
 
-document.getElementById("csvFileInput").addEventListener("change", (e) => {
+document.getElementById("mainCsvFileInput").addEventListener("change", (e) => {
     if (e.target.files.length > 0) {
-        document.getElementById("uploadCsvBtn").style.display = "inline-block";
+        document.getElementById("uploadMainCsvBtn").style.display = "inline-block";
     }
 });
 
-async function processCSV() {
-    const btn = document.getElementById("uploadCsvBtn");
-    const file = document.getElementById("csvFileInput").files[0];
+document.getElementById("opportunisticCsvFileInput").addEventListener("change", (e) => {
+    if (e.target.files.length > 0) {
+        document.getElementById("uploadOpportunisticCsvBtn").style.display = "inline-block";
+    }
+});
+
+async function processMainCSV() {
+    await processCSVUpload({
+        fileInputId: "mainCsvFileInput",
+        buttonId: "uploadMainCsvBtn",
+        collectionName: MAIN_COLLECTION,
+        label: "Main ECS"
+    });
+}
+
+async function processOpportunisticCSV() {
+    await processCSVUpload({
+        fileInputId: "opportunisticCsvFileInput",
+        buttonId: "uploadOpportunisticCsvBtn",
+        collectionName: OPPORTUNISTIC_COLLECTION,
+        label: "Opportunistic"
+    });
+}
+
+async function processCSVUpload({ fileInputId, buttonId, collectionName, label }) {
+    const btn = document.getElementById(buttonId);
+    const fileInput = document.getElementById(fileInputId);
+    const file = fileInput.files[0];
 
     if (!file) {
         return alert("Please select a CSV file first.");
@@ -511,7 +606,6 @@ async function processCSV() {
             btn.disabled = true;
             btn.innerText = "UPLOADING...";
 
-            const buildingSet = new Set();
             const ecsRows = [];
 
             for (let i = 1; i < rows.length; i++) {
@@ -529,8 +623,6 @@ async function processCSV() {
                     continue;
                 }
 
-                buildingSet.add(building);
-
                 ecsRows.push({
                     building,
                     room_id: roomId,
@@ -543,11 +635,11 @@ async function processCSV() {
                 return alert("No valid rows found in CSV.");
             }
 
-            await uploadLargeCsvToFirestore([...buildingSet], ecsRows);
+            await uploadRowsToCollection(collectionName, ecsRows);
 
-            alert(`Upload complete. ${ecsRows.length} ECS entries saved.`);
+            alert(`${label} upload complete. ${ecsRows.length} entries saved.`);
 
-            document.getElementById("csvFileInput").value = "";
+            fileInput.value = "";
             btn.style.display = "none";
 
             await loadBuildingsFromCloud();
@@ -556,35 +648,19 @@ async function processCSV() {
             console.error(err);
         } finally {
             btn.disabled = false;
-            btn.innerText = "UPLOAD CSV TO DATABASE";
+            btn.innerText = collectionName === MAIN_COLLECTION
+                ? "UPLOAD MAIN ECS CSV"
+                : "UPLOAD OPPORTUNISTIC CSV";
         }
     };
 
     reader.readAsText(file);
 }
 
-async function uploadLargeCsvToFirestore(buildings, ecsRows) {
+async function uploadRowsToCollection(collectionName, ecsRows) {
     const MAX_BATCH_SIZE = 450;
     let batch = db.batch();
     let operationCount = 0;
-
-    for (const building of buildings) {
-        const buildingRef = db.collection("buildings").doc(safeDocId(building));
-
-        batch.set(buildingRef, {
-            building,
-            updated_at: firebase.firestore.FieldValue.serverTimestamp()
-        });
-
-        operationCount++;
-
-        if (operationCount >= MAX_BATCH_SIZE) {
-            await batch.commit();
-            batch = db.batch();
-            operationCount = 0;
-        }
-    }
-
     const seenDocIds = new Set();
 
     for (const item of ecsRows) {
@@ -593,9 +669,9 @@ async function uploadLargeCsvToFirestore(buildings, ecsRows) {
         if (seenDocIds.has(docId)) continue;
         seenDocIds.add(docId);
 
-        const ecsRef = db.collection("ecs_master").doc(docId);
+        const ref = db.collection(collectionName).doc(docId);
 
-        batch.set(ecsRef, {
+        batch.set(ref, {
             building: item.building,
             room_id: item.room_id,
             ecs_code: item.ecs_code,
@@ -669,28 +745,41 @@ async function clearAllReports() {
     }
 }
 
-async function wipeMasterList() {
-    if (!confirm("Wipe master building, room, and ECS list? This cannot be undone.")) return;
+async function wipeMainMasterList() {
+    if (!confirm("Delete the main ECS master list? This cannot be undone.")) return;
 
     try {
-        await deleteCollectionInBatches("ecs_master");
-        await deleteCollectionInBatches("buildings");
+        await deleteCollectionInBatches(MAIN_COLLECTION);
 
         document.getElementById("buildingSelect").innerHTML = `<option value="">Empty</option>`;
-        document.getElementById("oppBuildingSelect").innerHTML = `<option value="">Empty</option>`;
-
         document.getElementById("roomSelect").innerHTML = `<option value="">Select room...</option>`;
         document.getElementById("ecsCodeSelect").innerHTML = `<option value="">Select ECS...</option>`;
+        document.getElementById("roomPicker").style.display = "none";
+
+        await loadBuildingsFromCloud();
+
+        alert("Main ECS master list deleted.");
+    } catch (e) {
+        alert("Delete main master list error: " + e.message);
+        console.error(e);
+    }
+}
+
+async function wipeOpportunisticMasterList() {
+    if (!confirm("Delete the opportunistic master list? This cannot be undone.")) return;
+
+    try {
+        await deleteCollectionInBatches(OPPORTUNISTIC_COLLECTION);
 
         document.getElementById("oppRoomSelect").innerHTML = `<option value="">Select room...</option>`;
         document.getElementById("oppEcsSelect").innerHTML = `<option value="">Select ECS...</option>`;
-
-        document.getElementById("roomPicker").style.display = "none";
         document.getElementById("opportunisticPicker").style.display = "none";
 
-        alert("Master list wiped.");
+        await loadBuildingsFromCloud();
+
+        alert("Opportunistic master list deleted.");
     } catch (e) {
-        alert("Wipe error: " + e.message);
+        alert("Delete opportunistic list error: " + e.message);
         console.error(e);
     }
 }
