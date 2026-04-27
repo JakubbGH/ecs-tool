@@ -5,7 +5,6 @@
     <title>ECS Gate Status Tool</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <!-- Firebase v8 SDK -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -14,10 +13,8 @@
         :root {
             --primary: #1f4e79;
             --secondary: #f4f6f8;
-            --success: #d4edda;
             --danger: #dc3545;
             --danger-dark: #b02a37;
-            --info: #007bff;
             --border: #d0d7de;
             --text: #222;
             --muted: #6c757d;
@@ -35,7 +32,7 @@
             color: var(--text);
         }
 
-        h1, h2, h3 {
+        h1, h2 {
             margin-top: 0;
         }
 
@@ -90,7 +87,6 @@
 
         .login-box h2 {
             text-align: center;
-            margin-bottom: 20px;
             color: var(--primary);
         }
 
@@ -101,7 +97,7 @@
         .login-box button {
             width: 100%;
             background: var(--primary);
-            color: var(--white);
+            color: white;
         }
 
         .login-error {
@@ -144,13 +140,8 @@
             font-size: 13px;
         }
 
-        .logout-btn {
-            background: #6c757d;
-            color: var(--white);
-        }
-
         .card {
-            background: var(--white);
+            background: white;
             border-radius: 14px;
             padding: 18px;
             margin-bottom: 18px;
@@ -159,8 +150,9 @@
 
         .grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr 1fr 1fr;
             gap: 14px;
+            align-items: end;
         }
 
         .actions {
@@ -172,22 +164,23 @@
 
         .primary-btn {
             background: var(--primary);
-            color: var(--white);
+            color: white;
         }
 
         .secondary-btn {
             background: #495057;
-            color: var(--white);
+            color: white;
         }
 
         .success-btn {
             background: #198754;
-            color: var(--white);
+            color: white;
         }
 
-        .danger-btn {
+        .danger-btn,
+        .del-btn {
             background: var(--danger);
-            color: var(--white);
+            color: white;
         }
 
         .danger-btn:hover,
@@ -196,8 +189,6 @@
         }
 
         .del-btn {
-            background: var(--danger);
-            color: var(--white);
             padding: 8px 10px;
             font-size: 12px;
         }
@@ -208,17 +199,16 @@
 
         table {
             width: 100%;
-            min-width: 900px;
+            min-width: 950px;
             border-collapse: collapse;
-            background: var(--white);
+            background: white;
         }
 
         th {
             background: var(--primary);
-            color: var(--white);
+            color: white;
             text-align: left;
             padding: 12px;
-            font-size: 14px;
         }
 
         td {
@@ -227,17 +217,9 @@
             vertical-align: middle;
         }
 
-        tr:hover {
-            background: #f8f9fa;
-        }
-
         .admin-section {
             display: none;
             border: 2px dashed var(--primary);
-        }
-
-        .admin-section h2 {
-            color: var(--primary);
         }
 
         .muted {
@@ -245,22 +227,14 @@
             font-size: 13px;
         }
 
-        .ecs-picker {
+        .picker-section {
             display: none;
             margin-top: 14px;
         }
 
-        #ecsCodeSelect {
-            min-height: 180px;
-        }
-
-        @media (max-width: 760px) {
+        @media (max-width: 800px) {
             .grid {
                 grid-template-columns: 1fr;
-            }
-
-            .top-bar {
-                align-items: flex-start;
             }
 
             button {
@@ -276,7 +250,6 @@
 
 <body>
 
-    <!-- LOGIN -->
     <div id="loginOverlay" class="login-overlay">
         <div class="login-box">
             <h2>ECS Tool Login</h2>
@@ -290,7 +263,6 @@
         </div>
     </div>
 
-    <!-- MAIN APP -->
     <main id="mainApp" class="app">
 
         <div class="top-bar">
@@ -298,11 +270,10 @@
 
             <div class="actions">
                 <span id="syncStatus" class="sync-status">Connecting...</span>
-                <button class="logout-btn" onclick="handleLogout()">LOGOUT</button>
+                <button class="secondary-btn" onclick="handleLogout()">LOGOUT</button>
             </div>
         </div>
 
-        <!-- BUILDING / ECS SELECTION -->
         <section class="card">
             <h2>Create Report</h2>
 
@@ -315,43 +286,47 @@
                 </div>
 
                 <div>
-                    <label>&nbsp;</label>
-                    <button class="primary-btn" onclick="loadBuildingToTable()">
-                        LOAD ECS CODES
+                    <button class="primary-btn" onclick="loadRoomsForBuilding()">
+                        LOAD ROOMS
+                    </button>
+                </div>
+
+                <div>
+                    <button class="secondary-btn" onclick="addOpportunisticEntry()">
+                        ADD OPPORTUNISTIC ENTRY
                     </button>
                 </div>
             </div>
 
-            <div id="ecsPicker" class="ecs-picker">
-                <label for="ecsCodeSelect">Select ECS Codes</label>
-                <select id="ecsCodeSelect" multiple size="8"></select>
+            <div id="roomPicker" class="picker-section">
+                <div class="grid">
+                    <div>
+                        <label for="roomSelect">Room ID</label>
+                        <select id="roomSelect" onchange="loadEcsForRoom()">
+                            <option>Select room...</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="ecsCodeSelect">ECS Code</label>
+                        <select id="ecsCodeSelect">
+                            <option>Select ECS...</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <button class="success-btn" onclick="addSelectedEcsCode()">
+                            ADD ECS TO REPORT
+                        </button>
+                    </div>
+                </div>
+
                 <p class="muted">
-                    Hold Ctrl or Cmd to select multiple ECS codes. Each option shows Room ID, ECS Code, and Commodity.
+                    Select a room first, then select one ECS code available in that room.
                 </p>
-
-                <div class="actions">
-                    <button id="addSelectedEcsBtn" class="success-btn" onclick="addSelectedEcsCodes()">
-                        ADD SELECTED ECS CODES
-                    </button>
-
-                    <button class="secondary-btn" onclick="selectAllVisibleEcsCodes()">
-                        SELECT ALL ECS CODES
-                    </button>
-
-                    <button class="secondary-btn" onclick="clearSelectedEcsCodes()">
-                        CLEAR SELECTION
-                    </button>
-                </div>
-            </div>
-
-            <div class="actions">
-                <button class="secondary-btn" onclick="addOpportunisticEntry()">
-                    ADD OPPORTUNISTIC ENTRY
-                </button>
             </div>
         </section>
 
-        <!-- REPORT TABLE -->
         <section class="card">
             <h2>Current Report</h2>
 
@@ -383,12 +358,11 @@
             </div>
         </section>
 
-        <!-- ADMIN SECTION -->
         <section id="adminSection" class="card admin-section">
             <h2>Admin</h2>
 
             <p class="muted">
-                Upload CSV in this format:
+                CSV format:
                 <strong>Building,Room ID,ECS Code,Commodity</strong>
             </p>
 
@@ -415,7 +389,7 @@
 
     </main>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=3"></script>
 
 </body>
 </html>
