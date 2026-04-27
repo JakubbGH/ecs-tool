@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>ECS Gate Status Tool</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
+
     <!-- Firebase v8 SDK -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -164,13 +164,6 @@
             align-items: end;
         }
 
-        .grid-two {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 14px;
-            align-items: end;
-        }
-
         .actions {
             display: flex;
             flex-wrap: wrap;
@@ -277,8 +270,7 @@
         }
 
         @media (max-width: 800px) {
-            .grid,
-            .grid-two {
+            .grid {
                 grid-template-columns: 1fr;
             }
 
@@ -317,6 +309,7 @@
 
             <div class="actions">
                 <span id="syncStatus" class="sync-status">Connecting...</span>
+                <button id="syncBtn" class="primary-btn" onclick="syncDatabase()">SYNC DATABASE</button>
                 <button class="secondary-btn" onclick="handleLogout()">LOGOUT</button>
             </div>
         </div>
@@ -452,7 +445,8 @@
                                 <option value="SUPPORT">SUPPORT</option>
                                 <option value="EQUIP">EQUIP</option>
                                 <option value="PCON">PCON</option>
-                                <option value="CLAMPVALVE">CLAMPVALVE</option>
+                                <option value="CLAMP">CLAMP</option>
+                                <option value="VALVE">VALVE</option>
                                 <option value="CABLE">CABLE</option>
                                 <option value="INLINE">INLINE</option>
                                 <option value="DUCT">DUCT</option>
@@ -566,7 +560,7 @@
 
     </main>
 
-    <script src="app.js?v=7"></script>
+    <script src="app.js?v=8"></script>
 
 </body>
 </html>
