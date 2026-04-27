@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <title>ECS Gate Status Tool</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
+
+    <!-- Firebase v8 SDK -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -13,6 +14,7 @@
         :root {
             --primary: #1f4e79;
             --secondary: #f4f6f8;
+            --success: #198754;
             --danger: #dc3545;
             --danger-dark: #b02a37;
             --border: #d0d7de;
@@ -32,7 +34,7 @@
             color: var(--text);
         }
 
-        h1, h2 {
+        h1, h2, h3 {
             margin-top: 0;
         }
 
@@ -88,6 +90,7 @@
         .login-box h2 {
             text-align: center;
             color: var(--primary);
+            margin-bottom: 20px;
         }
 
         .login-box input {
@@ -173,7 +176,7 @@
         }
 
         .success-btn {
-            background: #198754;
+            background: var(--success);
             color: white;
         }
 
@@ -209,6 +212,7 @@
             color: white;
             text-align: left;
             padding: 12px;
+            font-size: 14px;
         }
 
         td {
@@ -217,9 +221,17 @@
             vertical-align: middle;
         }
 
+        tr:hover {
+            background: #f8f9fa;
+        }
+
         .admin-section {
             display: none;
             border: 2px dashed var(--primary);
+        }
+
+        .admin-section h2 {
+            color: var(--primary);
         }
 
         .muted {
@@ -229,7 +241,11 @@
 
         .picker-section {
             display: none;
-            margin-top: 14px;
+            margin-top: 18px;
+            padding: 16px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: #fafafa;
         }
 
         @media (max-width: 800px) {
@@ -250,6 +266,7 @@
 
 <body>
 
+    <!-- LOGIN -->
     <div id="loginOverlay" class="login-overlay">
         <div class="login-box">
             <h2>ECS Tool Login</h2>
@@ -263,6 +280,7 @@
         </div>
     </div>
 
+    <!-- MAIN APP -->
     <main id="mainApp" class="app">
 
         <div class="top-bar">
@@ -274,6 +292,7 @@
             </div>
         </div>
 
+        <!-- CREATE REPORT -->
         <section class="card">
             <h2>Create Report</h2>
 
@@ -281,36 +300,39 @@
                 <div>
                     <label for="buildingSelect">Building</label>
                     <select id="buildingSelect">
-                        <option>Loading...</option>
+                        <option value="">Loading...</option>
                     </select>
                 </div>
 
                 <div>
                     <button class="primary-btn" onclick="loadRoomsForBuilding()">
-                        LOAD ROOMS
+                        LOAD BUILDING ROOMS
                     </button>
                 </div>
 
                 <div>
-                    <button class="secondary-btn" onclick="addOpportunisticEntry()">
+                    <button class="secondary-btn" onclick="toggleOpportunisticPicker()">
                         ADD OPPORTUNISTIC ENTRY
                     </button>
                 </div>
             </div>
 
+            <!-- NORMAL REPORT PICKER -->
             <div id="roomPicker" class="picker-section">
+                <h3>Building Room / ECS Selection</h3>
+
                 <div class="grid">
                     <div>
                         <label for="roomSelect">Room ID</label>
                         <select id="roomSelect" onchange="loadEcsForRoom()">
-                            <option>Select room...</option>
+                            <option value="">Select room...</option>
                         </select>
                     </div>
 
                     <div>
                         <label for="ecsCodeSelect">ECS Code</label>
                         <select id="ecsCodeSelect">
-                            <option>Select ECS...</option>
+                            <option value="">Select ECS...</option>
                         </select>
                     </div>
 
@@ -322,11 +344,54 @@
                 </div>
 
                 <p class="muted">
-                    Select a room first, then select one ECS code available in that room.
+                    Select a room, then select one ECS code available in that room.
+                </p>
+            </div>
+
+            <!-- OPPORTUNISTIC PICKER -->
+            <div id="opportunisticPicker" class="picker-section">
+                <h3>Opportunistic Entry</h3>
+
+                <div class="grid">
+                    <div>
+                        <label for="oppBuildingSelect">Building</label>
+                        <select id="oppBuildingSelect" onchange="loadOpportunisticRooms()">
+                            <option value="">Select building...</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="oppRoomSelect">Room ID</label>
+                        <select id="oppRoomSelect" onchange="loadOpportunisticEcs()">
+                            <option value="">Select room...</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="oppEcsSelect">ECS Code</label>
+                        <select id="oppEcsSelect">
+                            <option value="">Select ECS...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <button class="success-btn" onclick="addSelectedOpportunisticEntry()">
+                        ADD OPPORTUNISTIC ECS
+                    </button>
+
+                    <button class="secondary-btn" onclick="toggleOpportunisticPicker()">
+                        CLOSE
+                    </button>
+                </div>
+
+                <p class="muted">
+                    Select from the permanent master list. No manual typing required.
                 </p>
             </div>
         </section>
 
+        <!-- CURRENT REPORT -->
         <section class="card">
             <h2>Current Report</h2>
 
@@ -358,11 +423,12 @@
             </div>
         </section>
 
+        <!-- ADMIN -->
         <section id="adminSection" class="card admin-section">
             <h2>Admin</h2>
 
             <p class="muted">
-                CSV format:
+                Upload CSV format:
                 <strong>Building,Room ID,ECS Code,Commodity</strong>
             </p>
 
@@ -381,15 +447,15 @@
                     CLEAR ALL REPORTS
                 </button>
 
-                <button class="danger-btn" onclick="wipeAllBuildings()">
-                    WIPE MASTER BUILDING LIST
+                <button class="danger-btn" onclick="wipeMasterList()">
+                    WIPE MASTER BUILDING / ROOM / ECS LIST
                 </button>
             </div>
         </section>
 
     </main>
 
-    <script src="app.js?v=3"></script>
+    <script src="app.js?v=4"></script>
 
 </body>
 </html>
