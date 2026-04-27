@@ -2,108 +2,420 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ECS Validation Tool</title>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    
+    <title>ECS Gate Status Tool</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Firebase v8 SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
     <style>
-        :root { --primary: #007bff; --success: #28a745; --danger: #dc3545; --info: #17a2b8; --dark: #2c3e50; --purple: #6f42c1; --gray: #6c757d; --warning: #ffc107; }
-        
-        html, body {
-            height: 100%;
-            width: 100%;
-            margin: 0;
-            padding: 0;
-            overscroll-behavior-y: contain; 
-            overflow-x: hidden;
-            -webkit-overflow-scrolling: touch;
-            background: #f4f7f9;
-            color: #333;
-            font-family: -apple-system, system-ui, sans-serif;
+        :root {
+            --primary: #1f4e79;
+            --secondary: #f4f6f8;
+            --success: #d4edda;
+            --danger: #dc3545;
+            --danger-dark: #b02a37;
+            --info: #007bff;
+            --border: #d0d7de;
+            --text: #222;
+            --muted: #6c757d;
+            --white: #ffffff;
         }
 
-        #loginOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--dark); display: none; justify-content: center; align-items: center; z-index: 10000; }
-        .login-box { background: white; padding: 30px; border-radius: 15px; width: 85%; max-width: 350px; text-align: center; }
-        .login-box input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
-        .login-box button { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        * {
+            box-sizing: border-box;
+        }
 
-        #mainApp { display: none; padding: 15px; padding-bottom: 140px; min-height: 100.1vh; }
-        .status-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .sync-indicator { font-size: 11px; font-weight: bold; padding: 5px 12px; border-radius: 20px; background: #e0e0e0; color: #666; }
-        
-        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-weight: bold; font-size: 14px; color: #555; }
-        select { width: 100%; padding: 12px; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; background: #fff; margin-bottom: 10px; }
-        
-        .btn { width: 100%; padding: 15px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 16px; margin-bottom: 10px; }
-        .btn-load { background: var(--success); color: white; }
-        .btn-opp { background: var(--info); color: white; }
-        .btn-refresh { background: #eee; color: #333; font-size: 11px; padding: 6px 12px; width: auto; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; text-transform: uppercase; margin-bottom: 0; }
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: var(--secondary);
+            color: var(--text);
+        }
 
-        .table-container { background: white; border-radius: 10px; overflow-x: auto; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        table { width: 100%; border-collapse: collapse; min-width: 450px; }
-        th { background: #f8f9fa; padding: 12px; text-align: left; font-size: 12px; color: #777; border-bottom: 2px solid #eee; }
-        td { padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; }
-        .del-btn { background: var(--danger); color: white; border: none; padding: 6px 10px; border-radius: 5px; cursor: pointer; font-size: 11px; }
+        h1, h2, h3 {
+            margin-top: 0;
+        }
 
-        #adminSection { display: none; border-top: 2px dashed #eee; margin-top: 20px; padding-top: 20px; }
-        .btn-admin { background: var(--purple); color: white; margin-top: 10px; padding: 12px; font-size: 14px; width: 100%; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; text-transform: uppercase; }
+        button,
+        select,
+        input {
+            font-family: inherit;
+            font-size: 14px;
+        }
 
-        .export-btn { position: fixed; bottom: 20px; left: 5%; width: 90%; padding: 20px; background: var(--primary); color: white; font-size: 18px; font-weight: bold; border: none; border-radius: 50px; cursor: pointer; box-shadow: 0 5px 15px rgba(0,123,255,0.4); z-index: 999; text-transform: uppercase; }
+        button {
+            cursor: pointer;
+            border: none;
+            border-radius: 6px;
+            padding: 10px 14px;
+            font-weight: bold;
+        }
+
+        input,
+        select {
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px;
+            width: 100%;
+            background: var(--white);
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+
+        .login-overlay {
+            position: fixed;
+            inset: 0;
+            background: #0f172a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+        }
+
+        .login-box {
+            background: var(--white);
+            width: 92%;
+            max-width: 380px;
+            padding: 28px;
+            border-radius: 14px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+        }
+
+        .login-box h2 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: var(--primary);
+        }
+
+        .login-box input {
+            margin-bottom: 12px;
+        }
+
+        .login-box button {
+            width: 100%;
+            background: var(--primary);
+            color: var(--white);
+        }
+
+        .login-error {
+            display: none;
+            margin-top: 12px;
+            padding: 10px;
+            background: #f8d7da;
+            color: #842029;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        .app {
+            display: none;
+            max-width: 1250px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .top-bar h1 {
+            color: var(--primary);
+            margin-bottom: 0;
+        }
+
+        .sync-status {
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: #fff3cd;
+            color: #664d03;
+            font-weight: bold;
+            font-size: 13px;
+        }
+
+        .logout-btn {
+            background: #6c757d;
+            color: var(--white);
+        }
+
+        .card {
+            background: var(--white);
+            border-radius: 14px;
+            padding: 18px;
+            margin-bottom: 18px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .primary-btn {
+            background: var(--primary);
+            color: var(--white);
+        }
+
+        .secondary-btn {
+            background: #495057;
+            color: var(--white);
+        }
+
+        .success-btn {
+            background: #198754;
+            color: var(--white);
+        }
+
+        .danger-btn {
+            background: var(--danger);
+            color: var(--white);
+        }
+
+        .danger-btn:hover,
+        .del-btn:hover {
+            background: var(--danger-dark);
+        }
+
+        .del-btn {
+            background: var(--danger);
+            color: var(--white);
+            padding: 8px 10px;
+            font-size: 12px;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            min-width: 900px;
+            border-collapse: collapse;
+            background: var(--white);
+        }
+
+        th {
+            background: var(--primary);
+            color: var(--white);
+            text-align: left;
+            padding: 12px;
+            font-size: 14px;
+        }
+
+        td {
+            border-bottom: 1px solid var(--border);
+            padding: 10px;
+            vertical-align: middle;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .admin-section {
+            display: none;
+            border: 2px dashed var(--primary);
+        }
+
+        .admin-section h2 {
+            color: var(--primary);
+        }
+
+        .muted {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .ecs-picker {
+            display: none;
+            margin-top: 14px;
+        }
+
+        #ecsCodeSelect {
+            min-height: 180px;
+        }
+
+        @media (max-width: 760px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .top-bar {
+                align-items: flex-start;
+            }
+
+            button {
+                width: 100%;
+            }
+
+            .actions {
+                flex-direction: column;
+            }
+        }
     </style>
 </head>
+
 <body>
 
-<div id="loginOverlay">
-    <div class="login-box">
-        <h2>ECS Field Tool</h2>
-        <input type="email" id="emailInput" placeholder="Email">
-        <input type="password" id="passInput" placeholder="Password">
-        <button onclick="handleLogin()">SIGN IN</button>
-        <p id="loginError" style="color:var(--danger); display:none; margin-top:15px; font-size: 14px;"></p>
-    </div>
-</div>
+    <!-- LOGIN -->
+    <div id="loginOverlay" class="login-overlay">
+        <div class="login-box">
+            <h2>ECS Tool Login</h2>
 
-<div id="mainApp">
-    <div class="status-bar">
-        <h2 style="margin:0;">ECS Input Tool</h2>
-        <span id="syncStatus" class="sync-indicator">Syncing...</span>
-    </div>
+            <input id="emailInput" type="email" placeholder="Email">
+            <input id="passInput" type="password" placeholder="Password">
 
-    <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <label>Select Building</label>
-            <button class="btn-refresh" onclick="loadDataFromCloud()">🔄 Refresh List</button>
-        </div>
-        <select id="buildingSelect"><option>Loading...</option></select>
-        <button class="btn btn-load" onclick="loadBuildingToTable()">LOAD PLOW DATA</button>
-        <button class="btn btn-opp" onclick="addOpportunisticEntry()">ADD OPPORTUNISTIC WORK</button>
+            <button onclick="handleLogin()">LOGIN</button>
 
-        <div id="adminSection">
-            <label style="color: var(--purple);">Admin Master Controls</label>
-            <input type="file" id="csvFileInput" accept=".csv" style="display:none;">
-            <button class="btn-admin" onclick="document.getElementById('csvFileInput').click()">Import Building (CSV)</button>
-            <button id="uploadCsvBtn" class="btn-admin" style="background:#e83e8c; display:none;" onclick="processCSV()">Confirm CSV Upload</button>
-            <button class="btn-admin" style="background:var(--info);" onclick="exportAllReports()">Export All Reports (CSV)</button>
-            <button class="btn-admin" style="background:var(--gray);" onclick="clearAllReports()">Clear Report History</button>
-            <button class="btn-admin" style="background:var(--danger);" onclick="wipeAllBuildings()">Clear Master Building List</button>
+            <div id="loginError" class="login-error"></div>
         </div>
     </div>
 
-    <div class="table-container">
-        <table id="ecsTable">
-            <thead>
-                <tr><th>Building</th><th>ECS Code</th><th>Validation</th><th></th></tr>
-            </thead>
-            <tbody></tbody>
-        </table>
-    </div>
+    <!-- MAIN APP -->
+    <main id="mainApp" class="app">
 
-    <button class="export-btn" id="mainSaveBtn" onclick="saveToCloud()">SAVE REPORT</button>
-</div>
+        <div class="top-bar">
+            <h1>ECS Gate Status Tool</h1>
 
-<script src="app.js"></script>
+            <div class="actions">
+                <span id="syncStatus" class="sync-status">Connecting...</span>
+                <button class="logout-btn" onclick="handleLogout()">LOGOUT</button>
+            </div>
+        </div>
+
+        <!-- BUILDING / ECS SELECTION -->
+        <section class="card">
+            <h2>Create Report</h2>
+
+            <div class="grid">
+                <div>
+                    <label for="buildingSelect">Building</label>
+                    <select id="buildingSelect">
+                        <option>Loading...</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>&nbsp;</label>
+                    <button class="primary-btn" onclick="loadBuildingToTable()">
+                        LOAD ECS CODES
+                    </button>
+                </div>
+            </div>
+
+            <div id="ecsPicker" class="ecs-picker">
+                <label for="ecsCodeSelect">Select ECS Codes</label>
+                <select id="ecsCodeSelect" multiple size="8"></select>
+                <p class="muted">
+                    Hold Ctrl or Cmd to select multiple ECS codes. Each option shows Room ID, ECS Code, and Commodity.
+                </p>
+
+                <div class="actions">
+                    <button id="addSelectedEcsBtn" class="success-btn" onclick="addSelectedEcsCodes()">
+                        ADD SELECTED ECS CODES
+                    </button>
+
+                    <button class="secondary-btn" onclick="selectAllVisibleEcsCodes()">
+                        SELECT ALL ECS CODES
+                    </button>
+
+                    <button class="secondary-btn" onclick="clearSelectedEcsCodes()">
+                        CLEAR SELECTION
+                    </button>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button class="secondary-btn" onclick="addOpportunisticEntry()">
+                    ADD OPPORTUNISTIC ENTRY
+                </button>
+            </div>
+        </section>
+
+        <!-- REPORT TABLE -->
+        <section class="card">
+            <h2>Current Report</h2>
+
+            <div class="table-wrap">
+                <table id="ecsTable">
+                    <thead>
+                        <tr>
+                            <th>Building</th>
+                            <th>Room ID</th>
+                            <th>ECS Code</th>
+                            <th>Commodity</th>
+                            <th>Gate Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <div class="actions">
+                <button id="mainSaveBtn" class="success-btn" onclick="saveToCloud()">
+                    SAVE REPORT
+                </button>
+
+                <button class="danger-btn" onclick="clearCurrentReport()">
+                    CLEAR CURRENT REPORT
+                </button>
+            </div>
+        </section>
+
+        <!-- ADMIN SECTION -->
+        <section id="adminSection" class="card admin-section">
+            <h2>Admin</h2>
+
+            <p class="muted">
+                Upload CSV in this format:
+                <strong>Building,Room ID,ECS Code,Commodity</strong>
+            </p>
+
+            <input id="csvFileInput" type="file" accept=".csv">
+
+            <div class="actions">
+                <button id="uploadCsvBtn" class="primary-btn" onclick="processCSV()" style="display:none;">
+                    UPLOAD CSV TO DATABASE
+                </button>
+
+                <button class="secondary-btn" onclick="exportAllReports()">
+                    EXPORT ALL REPORTS
+                </button>
+
+                <button class="danger-btn" onclick="clearAllReports()">
+                    CLEAR ALL REPORTS
+                </button>
+
+                <button class="danger-btn" onclick="wipeAllBuildings()">
+                    WIPE MASTER BUILDING LIST
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <script src="app.js"></script>
+
 </body>
 </html>
