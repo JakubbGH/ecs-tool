@@ -290,7 +290,16 @@ function addSelectedEcsCode() {
 
 function toggleOpportunisticPicker() {
     const picker = document.getElementById("opportunisticPicker");
-    picker.style.display = picker.style.display === "block" ? "none" : "block";
+    const manualBox = document.getElementById("manualOpportunisticBox");
+
+    const isOpen = picker.style.display === "block";
+
+    picker.style.display = isOpen ? "none" : "block";
+
+    if (isOpen && manualBox) {
+        manualBox.style.display = "none";
+        clearManualOpportunisticEntry();
+    }
 }
 
 async function loadOpportunisticRooms() {
@@ -393,6 +402,23 @@ function addSelectedOpportunisticEntry() {
    MANUAL OPPORTUNISTIC FALLBACK
 ------------------------------------------------------- */
 
+function toggleManualOpportunisticEntry() {
+    const manualBox = document.getElementById("manualOpportunisticBox");
+
+    if (!manualBox) return;
+
+    manualBox.style.display = manualBox.style.display === "block" ? "none" : "block";
+}
+
+function hideManualOpportunisticEntry() {
+    const manualBox = document.getElementById("manualOpportunisticBox");
+
+    if (!manualBox) return;
+
+    manualBox.style.display = "none";
+    clearManualOpportunisticEntry();
+}
+
 function addManualOpportunisticEntry() {
     const buildingInput = document.getElementById("manualOppBuilding");
     const roomInput = document.getElementById("manualOppRoom");
@@ -452,7 +478,6 @@ async function getRoomsForBuilding(collectionName, building) {
         const roomId = cleanCell(data.room_id);
         const ecsCode = cleanCell(data.ecs_code);
 
-        // Only show room IDs that have at least one valid ECS code
         if (roomId && ecsCode) {
             roomsWithEcs.add(roomId);
         }
@@ -475,7 +500,6 @@ async function getEcsForBuildingRoom(collectionName, building, roomId) {
         const ecsCode = cleanCell(data.ecs_code);
         const commodity = normalizeCommodity(data.commodity);
 
-        // Skip blank ECS rows
         if (!ecsCode) return;
 
         items.push({
@@ -656,7 +680,6 @@ async function processCSVUpload({ fileInputId, buttonId, collectionName, label }
                 const ecsCode = cleanCell(cols[ecsIndex]);
                 const commodity = normalizeCommodity(cols[commodityIndex]);
 
-                // Skip rows that do not have a valid ECS code
                 if (!building || !roomId || !ecsCode || !commodity) continue;
 
                 if (!GATE_STATUSES_BY_COMMODITY[commodity]) {
